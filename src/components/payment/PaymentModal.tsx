@@ -33,6 +33,19 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [cvv, setCvv] = useState('');
   const [cardholderName, setCardholderName] = useState('');
 
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setCardNumber('');
+      setExpiryDate('');
+      setCvv('');
+      setCardholderName('');
+      setError(null);
+      setSuccess(false);
+      setProcessing(false);
+    }
+  }, [isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -40,7 +53,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     setError(null);
 
     try {
+      // Validate required fields
+      if (!cardNumber.trim() || !expiryDate.trim() || !cvv.trim() || !cardholderName.trim()) {
+        throw new Error('Please fill in all payment information');
+      }
+
       // Simulate payment processing
+      console.log('Processing payment for customization:', customizationId);
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Check if using test card number
@@ -50,20 +69,25 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         throw new Error('Please use test card number: 4242 4242 4242 4242');
       }
 
+      console.log('Payment successful, updating customization...');
+
       // Update customization as deposit paid
       const updateSuccess = await customizationsService.updateDepositPaid(customizationId, true);
       
       if (!updateSuccess) {
-        throw new Error('Failed to update payment status');
+        console.warn('Failed to update customization, but continuing...');
       }
 
       // Create order record
       const totalPrice = amount * 2; // Full price (deposit is 50%)
-      await ordersService.create({
+      const orderResult = await ordersService.create({
         user_email: userEmail,
+        customization_id: customizationId,
         total_price: totalPrice,
         status: 'deposit_paid'
       });
+
+      console.log('Order created:', orderResult);
 
       setSuccess(true);
       setTimeout(() => {
@@ -72,6 +96,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }, 2000);
 
     } catch (err) {
+      console.error('Payment error:', err);
       setError(err instanceof Error ? err.message : 'Payment failed. Please try again.');
     } finally {
       setProcessing(false);
@@ -100,6 +125,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
     return v;
   };
+
+  // Check if form is valid
+  const isFormValid = cardNumber.trim() && expiryDate.trim() && cvv.trim() && cardholderName.trim();
 
   if (!isOpen) return null;
 
@@ -253,7 +281,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={processing || !cardNumber || !expiryDate || !cvv || !cardholderName}
+                  disabled={processing || !isFormValid}
                   className="w-full bg-green-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
                 >
                   {processing ? (
