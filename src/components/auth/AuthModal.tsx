@@ -25,6 +25,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
     confirmPassword: ''
   });
 
+  // Get the correct redirect URL based on environment
+  const getRedirectUrl = () => {
+    // Check if we're in production (deployed)
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      // Use the actual domain for production
+      return `${window.location.origin}/auth/callback`;
+    }
+    
+    // For local development, use the dev server URL
+    return `${window.location.origin}/auth/callback`;
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,8 +97,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
     try {
       console.log('🔐 Sending password reset email to:', resetEmail);
       
+      const redirectUrl = getRedirectUrl();
+      console.log('🔗 Using redirect URL:', redirectUrl);
+      
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: redirectUrl,
       });
 
       if (error) {
@@ -175,6 +190,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
             <div className="space-y-3 text-sm text-gray-600 mb-6">
               <p>Please check your email and click the reset link to create a new password.</p>
               <p>The link will expire in 1 hour for security reasons.</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+                <p className="text-blue-700 text-xs">
+                  <strong>Note:</strong> The reset link will redirect you to this website ({window.location.origin}) where you can safely set your new password.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -260,7 +280,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-blue-700 text-sm">
                 <strong>Note:</strong> You'll receive an email with a link to reset your password. 
-                The link will expire in 1 hour.
+                The link will redirect you to <strong>{window.location.origin}</strong> where you can safely set your new password.
               </p>
             </div>
 
