@@ -594,6 +594,34 @@ export const customizationsService = {
       console.error('Error in updateAiImageUrl:', error);
       return false;
     }
+  },
+
+  // NEW: Delete customization method
+  async delete(id: string): Promise<boolean> {
+    try {
+      console.log('Deleting customization:', id);
+      
+      const queryPromise = supabase
+        .from('customizations')
+        .delete()
+        .eq('id', id);
+
+      const { error } = await Promise.race([
+        queryPromise,
+        createTimeoutPromise(3000)
+      ]);
+
+      if (error) {
+        console.error('Error deleting customization:', error);
+        return false;
+      }
+
+      console.log('Customization deleted successfully');
+      return true;
+    } catch (error) {
+      console.error('Error in delete customization:', error);
+      return false;
+    }
   }
 };
 

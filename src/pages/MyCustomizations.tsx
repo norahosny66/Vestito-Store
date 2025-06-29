@@ -11,6 +11,7 @@ const MyCustomizations: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
   const [selectedCustomization, setSelectedCustomization] = useState<Customization | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -49,13 +50,26 @@ const MyCustomizations: React.FC = () => {
       return;
     }
 
+    setDeletingId(customizationId);
+
     try {
-      // Note: We would need to add a delete method to the service
-      // For now, we'll just show a message
-      alert('Delete functionality would be implemented here. For demo purposes, customizations are preserved.');
+      console.log('Attempting to delete customization:', customizationId);
+      const success = await customizationsService.delete(customizationId);
+      
+      if (success) {
+        console.log('Customization deleted successfully');
+        // Remove from local state
+        setCustomizations(prev => prev.filter(c => c.id !== customizationId));
+        alert('Customization deleted successfully.');
+      } else {
+        console.error('Failed to delete customization');
+        alert('Failed to delete customization. Please try again.');
+      }
     } catch (error) {
       console.error('Error deleting customization:', error);
       alert('Error deleting customization. Please try again.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -64,6 +78,19 @@ const MyCustomizations: React.FC = () => {
     setSelectedCustomization(null);
     loadCustomizations(); // Refresh the list
     alert('Payment successful! Your customization is now in production.');
+  };
+
+  const downloadCustomizationImage = (customization: Customization) => {
+    if (customization.ai_image_url) {
+      const link = document.createElement('a');
+      link.href = customization.ai_image_url.startsWith('data:') 
+        ? customization.ai_image_url 
+        : `data:image/png;base64,${customization.ai_image_url}`;
+      link.download = `custom-design-${customization.id.slice(-8)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const getStatusIcon = (customization: Customization) => {
@@ -203,10 +230,17 @@ const MyCustomizations: React.FC = () => {
                                 className="w-full h-full object-cover"
                               />
                               <div className="absolute top-2 right-2 space-x-1">
-                                <button className="p-1 bg-white/90 rounded-full hover:bg-white transition-colors">
+                                <button 
+                                  className="p-1 bg-white/90 rounded-full hover:bg-white transition-colors"
+                                  title="View Full Size"
+                                >
                                   <Eye className="w-3 h-3 text-gray-700" />
                                 </button>
-                                <button className="p-1 bg-white/90 rounded-full hover:bg-white transition-colors">
+                                <button 
+                                  onClick={() => downloadCustomizationImage(customization)}
+                                  className="p-1 bg-white/90 rounded-full hover:bg-white transition-colors"
+                                  title="Download Image"
+                                >
                                   <Download className="w-3 h-3 text-gray-700" />
                                 </button>
                               </div>
@@ -267,24 +301,43 @@ const MyCustomizations: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleDelete(customization.id)}
-                            className="px-4 py-2 border border-red-300 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center"
+                            disabled={deletingId === customization.id}
+                            className="px-4 py-2 border border-red-300 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            {deletingId === customization.id ? (
+                              <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
                           </button>
                         </div>
                       )}
 
                       {customization.approved && !customization.deposit_paid && (
-                        <button
-                          onClick={() => {
-                            setSelectedCustomization(customization);
-                            setShowPayment(true);
-                          }}
-                          className="w-full bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"
-                        >
-                          <DollarSign className="w-4 h-4" />
-                          <span>Pay Deposit (${calculateDepositAmount(customization.items?.price || 0).toFixed(2)})</span>
-                        </button>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => {
+                              setSelectedCustomization(customization);
+                              setShowPayment(true);
+                            }}
+                            className="flex-1 bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                            <span>Pay Deposit (${calculateDepositAmount(customization.items?.price || 0).toFixed(2)})</span>
+                          </button>
+                          <button
+                            onClick={() => handleDelete(customization.id)}
+                            disabled={deletingId === customization.id}
+                            className="px-4 py-2 border border-red-300 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Cancel and Delete"
+                          >
+                            {deletingId === customization.id ? (
+                              <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
                       )}
 
                       {customization.deposit_paid && (
