@@ -26,6 +26,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Get the correct redirect URL based on environment
+  const getRedirectUrl = () => {
+    // Check if we're in production (deployed)
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return `${window.location.origin}/auth/callback`;
+    }
+    
+    // For local development, use the dev server URL
+    return `${window.location.origin}/auth/callback`;
+  };
+
   // Clear all session data completely
   const clearSessionData = async () => {
     try {
@@ -186,12 +197,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Clear any existing session first
       await clearSessionData();
       
+      const redirectUrl = getRedirectUrl();
+      console.log('🔗 Using redirect URL:', redirectUrl);
+      
       // Sign up with Supabase Auth (this will send verification email)
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: redirectUrl,
           data: {
             first_name: firstName,
             second_name: secondName,

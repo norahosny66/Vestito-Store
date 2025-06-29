@@ -8,7 +8,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false, // Disable automatic session detection from URL
+    detectSessionInUrl: true, // Enable session detection from URL for email verification
     flowType: 'pkce' // Use PKCE flow for better security
   },
   db: {
@@ -50,6 +50,8 @@ supabase.auth.onAuthStateChange((event, session) => {
     console.log('👋 User signed out');
     // Clear any remaining session data
     localStorage.removeItem(`sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`);
+  } else if (event === 'SIGNED_IN') {
+    console.log('✅ User signed in successfully');
   }
 });
 
