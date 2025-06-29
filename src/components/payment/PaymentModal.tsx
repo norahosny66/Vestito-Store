@@ -133,7 +133,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full">
+      <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -163,9 +163,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               <p className="text-gray-600">Your customization is now in production.</p>
             </div>
           ) : (
-            <>
+            <div className="space-y-6">
               {/* Order Summary */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <div className="bg-gray-50 rounded-lg p-4">
                 <h3 className="font-semibold text-gray-900 mb-2">Order Summary</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
@@ -190,7 +190,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="text-red-700 text-sm">{error}</p>
                 </div>
               )}
@@ -278,26 +278,35 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   </p>
                 </div>
 
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={processing || !isFormValid}
-                  className="w-full bg-green-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
-                >
-                  {processing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Processing Payment...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-4 h-4" />
-                      <span>Pay ${amount.toFixed(2)} Securely</span>
-                    </>
-                  )}
-                </button>
+                {/* Submit Button - Fixed positioning and visibility */}
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    disabled={processing || !isFormValid}
+                    className="w-full bg-green-500 text-white font-semibold py-4 px-6 rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 text-lg"
+                  >
+                    {processing ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Processing Payment...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-5 h-5" />
+                        <span>Pay ${amount.toFixed(2)} Securely</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Debug info for form validation */}
+                {!isFormValid && (
+                  <div className="text-xs text-gray-500 text-center">
+                    Please fill in all fields to enable payment
+                  </div>
+                )}
               </form>
-            </>
+            </div>
           )}
         </div>
       </div>
