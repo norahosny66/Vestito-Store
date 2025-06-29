@@ -200,15 +200,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
               
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-4">
                 <p className="text-green-700 text-xs">
-                  <strong>✅ Redirect URL:</strong> The reset link will redirect you to:<br />
-                  <code className="bg-green-100 px-1 rounded">{currentDomain}/auth/callback</code>
+                  <strong>✅ Reset Process:</strong><br />
+                  1. Check your email for the reset link<br />
+                  2. Click the link to open the password reset form<br />
+                  3. Enter your new password<br />
+                  4. Sign in with your new password
                 </p>
               </div>
               
               {currentDomain.includes('localhost') && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
                   <p className="text-amber-700 text-xs">
-                    <strong>⚠️ Local Development:</strong> Make sure your dev server is running on the same port when you click the reset link.
+                    <strong>⚠️ Local Development:</strong> Make sure your dev server is running when you click the reset link.
                   </p>
                 </div>
               )}
@@ -267,7 +270,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
               </button>
             </div>
             <p className="text-gray-600 mt-2">
-              Enter your email address and we'll send you a link to reset your password.
+              Enter your email address and we'll send you a secure link to reset your password.
             </p>
           </div>
 
@@ -298,9 +301,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-blue-700 text-sm">
-                <strong>Reset Link Destination:</strong><br />
-                The password reset link will redirect you to:<br />
-                <code className="bg-blue-100 px-1 rounded text-xs">{currentDomain}/auth/callback</code>
+                <strong>How it works:</strong><br />
+                We'll send you a secure link that will redirect you to a password reset form on our website. 
+                You'll be able to set a new password safely and securely.
               </p>
             </div>
 
@@ -312,12 +315,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Sending Reset Email...</span>
+                  <span>Sending Reset Link...</span>
                 </>
               ) : (
                 <>
                   <Mail className="w-4 h-4" />
-                  <span>Send Reset Email</span>
+                  <span>Send Reset Link</span>
                 </>
               )}
             </button>
