@@ -1,82 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, Package, Palette, DollarSign, TrendingUp, Clock, CheckCircle, AlertCircle } from 'lucide-react';
-
-interface CustomOrder {
-  id: string;
-  customerName: string;
-  customerEmail: string;
-  productName: string;
-  customizationPrompt: string;
-  status: 'pending' | 'in-progress' | 'preview-ready' | 'approved' | 'completed';
-  orderDate: string;
-  totalAmount: number;
-  depositPaid: boolean;
-}
+import { useAuth } from '../contexts/AuthContext';
+import { customizationsService, ordersService } from '../services/database';
+import { Customization, Order } from '../lib/supabase';
+import { Link } from 'react-router-dom';
 
 const Admin: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'customizations'>('overview');
+  const [customizations, setCustomizations] = useState<Customization[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
-  // Mock data
-  const stats = {
-    totalOrders: 127,
-    pendingCustomizations: 18,
-    monthlyRevenue: 45280,
-    completedOrders: 89
+  // Check if user should have admin access (for demo, we'll use a simple email check)
+  const isAdmin = user?.email === 'admin@ateliercouture.com' || user?.email?.includes('admin');
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadAdminData();
+    }
+  }, [isAdmin]);
+
+  const loadAdminData = async () => {
+    setLoading(true);
+    try {
+      // For demo purposes, we'll load all data
+      // In a real app, you'd have admin-specific endpoints
+      const [customizationsData, ordersData] = await Promise.all([
+        customizationsService.getByUserEmail(''), // This would be an admin method
+        ordersService.getByUserEmail('') // This would be an admin method
+      ]);
+      
+      setCustomizations(customizationsData);
+      setOrders(ordersData);
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const customOrders: CustomOrder[] = [
-    {
-      id: '1',
-      customerName: 'Sarah Johnson',
-      customerEmail: 'sarah@example.com',
-      productName: 'Elegant Silk Dress',
-      customizationPrompt: 'Make the sleeves longer and add lace details at the hem',
-      status: 'pending',
-      orderDate: '2025-01-08',
-      totalAmount: 449,
-      depositPaid: false
-    },
-    {
-      id: '2',
-      customerName: 'Emily Chen',
-      customerEmail: 'emily@example.com',
-      productName: 'Premium Cotton Blazer',
-      customizationPrompt: 'Change color to lavender and make it more fitted',
-      status: 'in-progress',
-      orderDate: '2025-01-07',
-      totalAmount: 339,
-      depositPaid: true
-    },
-    {
-      id: '3',
-      customerName: 'Maria Rodriguez',
-      customerEmail: 'maria@example.com',
-      productName: 'Evening Gown',
-      customizationPrompt: 'Extend to floor length and add gold beading',
-      status: 'preview-ready',
-      orderDate: '2025-01-06',
-      totalAmount: 609,
-      depositPaid: true
-    },
-    {
-      id: '4',
-      customerName: 'Anna Thompson',
-      customerEmail: 'anna@example.com',
-      productName: 'Cashmere Sweater',
-      customizationPrompt: 'Make it oversized and add cable knit pattern',
-      status: 'approved',
-      orderDate: '2025-01-05',
-      totalAmount: 395,
-      depositPaid: true
-    }
-  ];
+  // Mock stats for demo
+  const stats = {
+    totalOrders: orders.length || 127,
+    pendingCustomizations: customizations.filter(c => !c.approved).length || 18,
+    monthlyRevenue: orders.reduce((sum, order) => sum + order.total_price, 0) || 45280,
+    completedOrders: orders.filter(o => o.status === 'delivered').length || 89
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'in-progress': return 'bg-blue-100 text-blue-800';
-      case 'preview-ready': return 'bg-purple-100 text-purple-800';
-      case 'approved': return 'bg-green-100 text-green-800';
+      case 'approved': return 'bg-blue-100 text-blue-800';
+      case 'deposit_paid': return 'bg-green-100 text-green-800';
+      case 'in_production': return 'bg-purple-100 text-purple-800';
       case 'completed': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -85,13 +62,59 @@ const Admin: React.FC = () => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending': return <Clock className="w-4 h-4" />;
-      case 'in-progress': return <Palette className="w-4 h-4" />;
-      case 'preview-ready': return <AlertCircle className="w-4 h-4" />;
       case 'approved': return <CheckCircle className="w-4 h-4" />;
+      case 'deposit_paid': return <CheckCircle className="w-4 h-4" />;
+      case 'in_production': return <Palette className="w-4 h-4" />;
       case 'completed': return <CheckCircle className="w-4 h-4" />;
       default: return <Clock className="w-4 h-4" />;
     }
   };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Please Sign In</h1>
+          <p className="text-gray-600 mb-6">You need to be signed in to access the admin panel.</p>
+          <Link to="/" className="text-amber-600 hover:text-amber-700">
+            Return to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+          <p className="text-gray-600 mb-6">
+            You don't have admin privileges. This is a customer account.
+          </p>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              For demo purposes, use an email containing "admin" to access the admin panel.
+            </p>
+            <div className="flex space-x-4 justify-center">
+              <Link
+                to="/my-orders"
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                View My Orders
+              </Link>
+              <Link
+                to="/my-customizations"
+                className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+              >
+                View My Customizations
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -107,8 +130,8 @@ const Admin: React.FC = () => {
           <div className="flex border-b border-gray-200">
             {[
               { key: 'overview', label: 'Overview', icon: TrendingUp },
-              { key: 'orders', label: 'Custom Orders', icon: Package },
-              { key: 'products', label: 'Products', icon: Users }
+              { key: 'customizations', label: 'Customizations', icon: Palette },
+              { key: 'orders', label: 'Orders', icon: Package }
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -180,33 +203,74 @@ const Admin: React.FC = () => {
               </div>
             </div>
 
-            {/* Recent Orders */}
+            {/* Recent Activity */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
               <div className="p-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Recent Custom Orders</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
               </div>
               <div className="p-6">
+                <div className="text-center py-12">
+                  <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">Admin Overview</h4>
+                  <p className="text-gray-600">
+                    Welcome to the admin dashboard. Use the tabs above to manage customizations and orders.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Customizations Tab */}
+        {activeTab === 'customizations' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Customization Requests</h3>
+              <p className="text-gray-600 mt-1">Manage customer customization requests and approvals.</p>
+            </div>
+            <div className="p-6">
+              {customizations.length === 0 ? (
+                <div className="text-center py-12">
+                  <Palette className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">No Customizations</h4>
+                  <p className="text-gray-600">No customization requests found.</p>
+                </div>
+              ) : (
                 <div className="space-y-4">
-                  {customOrders.slice(0, 3).map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-4">
-                        <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
-                          {getStatusIcon(order.status)}
-                          <span className="capitalize">{order.status.replace('-', ' ')}</span>
+                  {customizations.map((customization) => (
+                    <div key={customization.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900">
+                            {customization.items?.name || 'Unknown Item'}
+                          </h4>
+                          <p className="text-sm text-gray-500 mb-2">{customization.user_email}</p>
+                          <p className="text-sm text-gray-700 italic">"{customization.prompt}"</p>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Created: {new Date(customization.created_at).toLocaleDateString()}
+                          </p>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">{order.customerName}</p>
-                          <p className="text-sm text-gray-500">{order.productName}</p>
+                        <div className="ml-4">
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            customization.deposit_paid 
+                              ? 'bg-green-100 text-green-800'
+                              : customization.approved 
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {customization.deposit_paid 
+                              ? 'In Production'
+                              : customization.approved 
+                              ? 'Awaiting Deposit'
+                              : 'Pending Review'
+                            }
+                          </span>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900">${order.totalAmount}</p>
-                        <p className="text-sm text-gray-500">{order.orderDate}</p>
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -215,84 +279,38 @@ const Admin: React.FC = () => {
         {activeTab === 'orders' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
             <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Custom Orders Management</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customization</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {customOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <p className="font-medium text-gray-900">{order.customerName}</p>
-                          <p className="text-sm text-gray-500">{order.customerEmail}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <p className="text-sm font-medium text-gray-900">{order.productName}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-gray-600 max-w-xs truncate" title={order.customizationPrompt}>
-                          {order.customizationPrompt}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
-                          {getStatusIcon(order.status)}
-                          <span className="capitalize">{order.status.replace('-', ' ')}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <p className="font-medium text-gray-900">${order.totalAmount}</p>
-                          <p className="text-sm text-gray-500">
-                            {order.depositPaid ? 'Deposit paid' : 'Pending payment'}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {order.orderDate}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button className="text-amber-600 hover:text-amber-700 font-medium text-sm">
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Products Tab */}
-        {activeTab === 'products' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Product Management</h3>
-              <p className="text-gray-600 mt-1">Manage your product catalog and customization options.</p>
+              <h3 className="text-lg font-semibold text-gray-900">Order Management</h3>
+              <p className="text-gray-600 mt-1">Track and manage customer orders.</p>
             </div>
             <div className="p-6">
-              <div className="text-center py-12">
-                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h4 className="text-lg font-medium text-gray-900 mb-2">Product Management</h4>
-                <p className="text-gray-600">
-                  Product management features would be implemented here, including adding new products, 
-                  managing inventory, and configuring customization options.
-                </p>
-              </div>
+              {orders.length === 0 ? (
+                <div className="text-center py-12">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">No Orders</h4>
+                  <p className="text-gray-600">No orders found.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {orders.map((order) => (
+                    <div key={order.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold text-gray-900">
+                            Order #{order.id.slice(-8).toUpperCase()}
+                          </h4>
+                          <p className="text-sm text-gray-500">{order.user_email}</p>
+                          <p className="text-sm text-gray-600">
+                            ${order.total_price.toFixed(2)} • {new Date(order.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
+                          {order.status.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
