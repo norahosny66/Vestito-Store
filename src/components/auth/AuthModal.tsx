@@ -27,14 +27,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
 
   // Get the correct redirect URL based on environment
   const getRedirectUrl = () => {
-    // Check if we're in production (deployed)
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      // Use the actual domain for production
-      return `${window.location.origin}/auth/callback`;
-    }
+    // Always use the current origin for the redirect URL
+    const origin = window.location.origin;
     
-    // For local development, use the dev server URL
-    return `${window.location.origin}/auth/callback`;
+    // For deployed sites, this will be the actual domain
+    // For localhost, this will be localhost with the correct port
+    const redirectUrl = `${origin}/auth/callback`;
+    
+    console.log('🔗 Redirect URL determined:', redirectUrl);
+    console.log('🌐 Current origin:', origin);
+    console.log('🏠 Current hostname:', window.location.hostname);
+    
+    return redirectUrl;
   };
 
   if (!isOpen) return null;
@@ -98,8 +102,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
       console.log('🔐 Sending password reset email to:', resetEmail);
       
       const redirectUrl = getRedirectUrl();
-      console.log('🔗 Using redirect URL:', redirectUrl);
+      console.log('🔗 Using redirect URL for password reset:', redirectUrl);
       
+      // IMPORTANT: Use the exact same domain format that Supabase expects
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: redirectUrl,
       });
@@ -155,6 +160,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
 
   // Password reset email sent screen
   if (mode === 'reset-sent') {
+    const currentDomain = window.location.origin;
+    
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl max-w-md w-full">
@@ -190,11 +197,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
             <div className="space-y-3 text-sm text-gray-600 mb-6">
               <p>Please check your email and click the reset link to create a new password.</p>
               <p>The link will expire in 1 hour for security reasons.</p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-                <p className="text-blue-700 text-xs">
-                  <strong>Note:</strong> The reset link will redirect you to this website ({window.location.origin}) where you can safely set your new password.
+              
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-4">
+                <p className="text-green-700 text-xs">
+                  <strong>✅ Redirect URL:</strong> The reset link will redirect you to:<br />
+                  <code className="bg-green-100 px-1 rounded">{currentDomain}/auth/callback</code>
                 </p>
               </div>
+              
+              {currentDomain.includes('localhost') && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
+                  <p className="text-amber-700 text-xs">
+                    <strong>⚠️ Local Development:</strong> Make sure your dev server is running on the same port when you click the reset link.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -226,6 +243,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
 
   // Forgot password form
   if (mode === 'forgot-password') {
+    const currentDomain = window.location.origin;
+    
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl max-w-md w-full">
@@ -279,8 +298,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-blue-700 text-sm">
-                <strong>Note:</strong> You'll receive an email with a link to reset your password. 
-                The link will redirect you to <strong>{window.location.origin}</strong> where you can safely set your new password.
+                <strong>Reset Link Destination:</strong><br />
+                The password reset link will redirect you to:<br />
+                <code className="bg-blue-100 px-1 rounded text-xs">{currentDomain}/auth/callback</code>
               </p>
             </div>
 
