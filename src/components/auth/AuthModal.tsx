@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Mail, Lock, User, Loader2 } from 'lucide-react';
+import { X, Mail, Lock, User, Loader2, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface AuthModalProps {
@@ -9,9 +9,10 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'signin' }) => {
-  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'signup' | 'verification'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string>('');
   const { signIn, signUp } = useAuth();
 
   const [formData, setFormData] = useState({
@@ -37,6 +38,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
           return;
         }
 
+        console.log('🔐 Starting sign-up process...');
         const { error } = await signUp(
           formData.email,
           formData.password,
@@ -45,20 +47,28 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
         );
 
         if (error) {
+          console.error('❌ Sign-up error:', error.message);
           setError(error.message);
         } else {
-          onClose();
+          console.log('✅ Sign-up successful, showing verification message');
+          // Show verification screen
+          setVerificationEmail(formData.email);
+          setMode('verification');
         }
       } else {
+        console.log('🔐 Starting sign-in process...');
         const { error } = await signIn(formData.email, formData.password);
 
         if (error) {
+          console.error('❌ Sign-in error:', error.message);
           setError(error.message);
         } else {
+          console.log('✅ Sign-in successful');
           onClose();
         }
       }
     } catch (err) {
+      console.error('❌ Unexpected error:', err);
       setError('An unexpected error occurred');
     }
 
@@ -80,6 +90,78 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
     setMode(mode === 'signin' ? 'signup' : 'signin');
     resetForm();
   };
+
+  const handleBackToSignIn = () => {
+    setMode('signin');
+    resetForm();
+    setVerificationEmail('');
+  };
+
+  // Verification success screen
+  if (mode === 'verification') {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl max-w-md w-full">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900">Check Your Email</h2>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+            
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              Account Created Successfully!
+            </h3>
+            
+            <p className="text-gray-600 mb-4">
+              We've sent a verification email to:
+            </p>
+            
+            <div className="bg-gray-50 rounded-lg p-3 mb-6">
+              <p className="font-medium text-gray-900">{verificationEmail}</p>
+            </div>
+            
+            <div className="space-y-3 text-sm text-gray-600 mb-6">
+              <p>Please check your email and click the verification link to activate your account.</p>
+              <p>Once verified, you can sign in and start customizing your fashion pieces!</p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleBackToSignIn}
+                className="w-full bg-amber-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-amber-600 transition-colors"
+              >
+                Continue to Sign In
+              </button>
+              
+              <button
+                onClick={onClose}
+                className="w-full text-gray-600 hover:text-gray-800 font-medium"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <p className="text-xs text-gray-500">
+                Didn't receive the email? Check your spam folder or contact support.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -127,6 +209,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       placeholder="John"
                       required
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -143,6 +226,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       placeholder="Doe"
                       required
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -163,6 +247,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                 placeholder="john@example.com"
                 required
+                disabled={loading}
               />
             </div>
           </div>
@@ -181,6 +266,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
                 placeholder="••••••••"
                 required
                 minLength={6}
+                disabled={loading}
               />
             </div>
           </div>
@@ -200,8 +286,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
                   placeholder="••••••••"
                   required
                   minLength={6}
+                  disabled={loading}
                 />
               </div>
+            </div>
+          )}
+
+          {mode === 'signup' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-blue-700 text-sm">
+                <strong>Note:</strong> You'll receive a verification email after creating your account. 
+                Please verify your email before signing in.
+              </p>
             </div>
           )}
 
@@ -226,7 +322,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
               <button
                 type="button"
                 onClick={switchMode}
-                className="text-amber-600 hover:text-amber-700 font-medium"
+                disabled={loading}
+                className="text-amber-600 hover:text-amber-700 font-medium disabled:opacity-50"
               >
                 {mode === 'signin' ? 'Sign up' : 'Sign in'}
               </button>

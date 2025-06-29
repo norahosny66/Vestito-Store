@@ -181,14 +181,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, firstName: string, secondName: string) => {
     try {
-      console.log('📝 Signing up user:', email);
+      console.log('📝 Starting sign-up process for:', email);
       
       // Clear any existing session first
       await clearSessionData();
       
+      // Sign up with Supabase Auth (this will send verification email)
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            first_name: firstName,
+            second_name: secondName,
+          }
+        }
       });
 
       if (error) {
@@ -196,33 +204,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error };
       }
 
-      // Create user profile
-      if (data.user) {
-        try {
-          console.log('👤 Creating user profile...');
-          const { error: profileError } = await supabase
-            .from('User')
-            .insert([
-              {
-                email: data.user.email!,
-                first_name: firstName,
-                second_name: secondName,
-              }
-            ]);
-
-          if (profileError) {
-            console.error('❌ Error creating user profile:', profileError.message);
-            return { error: profileError };
-          }
-          
-          console.log('✅ User profile created successfully');
-        } catch (profileError) {
-          console.error('❌ Profile creation failed:', profileError);
-          return { error: profileError };
-        }
-      }
-
-      console.log('✅ Sign up successful');
+      console.log('✅ Sign up successful - verification email sent');
+      console.log('📧 User will need to verify email before they can sign in');
+      
+      // Note: We don't create the User profile here because the user isn't confirmed yet
+      // The profile will be created after email verification when they first sign in
+      
       return { error: null };
     } catch (error) {
       console.error('❌ Sign up failed:', error);
@@ -237,21 +224,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Clear any existing session first to prevent conflicts
       await clearSessionData();
       
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
         console.error('❌ Sign in error:', error.message);
-      } else {
-        console.log('✅ Sign in successful');
+        return { error };
       }
 
-      return { error };
+      console.log('✅ Sign in successful');
+      
+      // Check if user profile exists, create if it doesn't
+      if (data.user) {
+        await ensureUserProfile(data.user);
+      }
+
+      return { error: null };
     } catch (error) {
       console.error('❌ Sign in failed:', error);
       return { error };
+    }
+  };
+
+  // Helper function to ensure user profile exists
+  const ensureUserProfile = async (user: SupabaseUser) => {
+    try {
+      console.log('🔍 Checking if user profile exists...');
+      
+      const { data: existingProfile } = await supabase
+        .from('User')
+        .select('*')
+        .eq('email', user.email!)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        console.log('👤 Creating user profile from metadata...');
+        
+        // Get user metadata from sign-up
+        const firstName = user.user_metadata?.first_name || user.email?.split('@')[0] || 'User';
+        const secondName = user.user_metadata?.second_name || '';
+        
+        const { error: profileError } = await supabase
+          .from('User')
+          .insert([
+            {
+              email: user.email!,
+              first_name: firstName,
+              second_name: secondName,
+            }
+          ]);
+
+        if (profileError) {
+          console.error('❌ Error creating user profile:', profileError.message);
+        } else {
+          console.log('✅ User profile created successfully');
+        }
+      } else {
+        console.log('✅ User profile already exists');
+      }
+    } catch (error) {
+      console.error('❌ Error ensuring user profile:', error);
     }
   };
 
