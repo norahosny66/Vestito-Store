@@ -12,8 +12,10 @@ const Admin: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
-  // Check if user should have admin access (for demo, we'll use a simple email check)
-  const isAdmin = user?.email === 'admin@ateliercouture.com' || user?.email?.includes('admin');
+  // Check if user should have admin access
+  const isAdmin = user?.email === 'admin@ateliercouture.com' || 
+                  user?.email?.includes('admin') || 
+                  user?.email === 'admin@example.com';
 
   useEffect(() => {
     if (isAdmin) {
@@ -24,11 +26,10 @@ const Admin: React.FC = () => {
   const loadAdminData = async () => {
     setLoading(true);
     try {
-      // For demo purposes, we'll load all data
-      // In a real app, you'd have admin-specific endpoints
+      // Load all customizations and orders for admin view
       const [customizationsData, ordersData] = await Promise.all([
-        customizationsService.getByUserEmail(''), // This would be an admin method
-        ordersService.getByUserEmail('') // This would be an admin method
+        customizationsService.getAll(),
+        ordersService.getAll()
       ]);
       
       setCustomizations(customizationsData);
@@ -40,12 +41,12 @@ const Admin: React.FC = () => {
     }
   };
 
-  // Mock stats for demo
+  // Calculate stats
   const stats = {
-    totalOrders: orders.length || 127,
-    pendingCustomizations: customizations.filter(c => !c.approved).length || 18,
-    monthlyRevenue: orders.reduce((sum, order) => sum + order.total_price, 0) || 45280,
-    completedOrders: orders.filter(o => o.status === 'delivered').length || 89
+    totalOrders: orders.length,
+    pendingCustomizations: customizations.filter(c => !c.approved).length,
+    monthlyRevenue: orders.reduce((sum, order) => sum + order.total_price, 0),
+    completedOrders: orders.filter(o => o.status === 'delivered' || o.status === 'completed').length
   };
 
   const getStatusColor = (status: string) => {
@@ -53,7 +54,10 @@ const Admin: React.FC = () => {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'approved': return 'bg-blue-100 text-blue-800';
       case 'deposit_paid': return 'bg-green-100 text-green-800';
-      case 'in_production': return 'bg-purple-100 text-purple-800';
+      case 'paid': return 'bg-green-100 text-green-800';
+      case 'processing': return 'bg-blue-100 text-blue-800';
+      case 'shipped': return 'bg-purple-100 text-purple-800';
+      case 'delivered': return 'bg-green-100 text-green-800';
       case 'completed': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -64,7 +68,10 @@ const Admin: React.FC = () => {
       case 'pending': return <Clock className="w-4 h-4" />;
       case 'approved': return <CheckCircle className="w-4 h-4" />;
       case 'deposit_paid': return <CheckCircle className="w-4 h-4" />;
-      case 'in_production': return <Palette className="w-4 h-4" />;
+      case 'paid': return <CheckCircle className="w-4 h-4" />;
+      case 'processing': return <Package className="w-4 h-4" />;
+      case 'shipped': return <Package className="w-4 h-4" />;
+      case 'delivered': return <CheckCircle className="w-4 h-4" />;
       case 'completed': return <CheckCircle className="w-4 h-4" />;
       default: return <Clock className="w-4 h-4" />;
     }
@@ -88,9 +95,9 @@ const Admin: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Customer Account</h1>
           <p className="text-gray-600 mb-6">
-            You don't have admin privileges. This is a customer account.
+            You're signed in as a customer. Access your personal dashboard below.
           </p>
           <div className="space-y-4">
             <p className="text-sm text-gray-500">
@@ -109,8 +116,25 @@ const Admin: React.FC = () => {
               >
                 View My Customizations
               </Link>
+              <Link
+                to="/shop"
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                Continue Shopping
+              </Link>
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading admin dashboard...</p>
         </div>
       </div>
     );
@@ -123,6 +147,9 @@ const Admin: React.FC = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
           <p className="text-gray-600">Manage your custom orders and track business performance.</p>
+          <div className="mt-2 text-sm text-green-600">
+            ✓ Signed in as Administrator ({user.email})
+          </div>
         </div>
 
         {/* Navigation Tabs */}
@@ -181,7 +208,7 @@ const Admin: React.FC = () => {
               <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Monthly Revenue</p>
+                    <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
                     <p className="text-2xl font-bold text-gray-900">${stats.monthlyRevenue.toLocaleString()}</p>
                   </div>
                   <div className="p-3 bg-green-100 rounded-lg">
@@ -209,12 +236,29 @@ const Admin: React.FC = () => {
                 <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
               </div>
               <div className="p-6">
-                <div className="text-center py-12">
-                  <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">Admin Overview</h4>
-                  <p className="text-gray-600">
-                    Welcome to the admin dashboard. Use the tabs above to manage customizations and orders.
-                  </p>
+                <div className="space-y-4">
+                  {orders.slice(0, 5).map((order) => (
+                    <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
+                          {getStatusIcon(order.status)}
+                          <span className="capitalize">{order.status.replace('_', ' ')}</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            Order #{order.id.slice(-8).toUpperCase()}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {order.customization_id ? 'Custom Design' : 'Regular Order'} • {order.user_email}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-900">${order.total_price.toFixed(2)}</p>
+                        <p className="text-sm text-gray-500">{new Date(order.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -241,12 +285,24 @@ const Admin: React.FC = () => {
                     <div key={customization.id} className="border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900">
-                            {customization.items?.name || 'Unknown Item'}
-                          </h4>
-                          <p className="text-sm text-gray-500 mb-2">{customization.user_email}</p>
-                          <p className="text-sm text-gray-700 italic">"{customization.prompt}"</p>
-                          <p className="text-xs text-gray-500 mt-2">
+                          <div className="flex items-center space-x-4 mb-2">
+                            <img
+                              src={customization.items?.image_url}
+                              alt={customization.items?.name}
+                              className="w-16 h-20 object-cover rounded-lg"
+                            />
+                            <div>
+                              <h4 className="font-semibold text-gray-900">
+                                {customization.items?.name || 'Unknown Item'}
+                              </h4>
+                              <p className="text-sm text-gray-500">{customization.user_email}</p>
+                              <p className="text-sm text-gray-600 mt-1">
+                                Base Price: ${customization.items?.price || 0}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-700 italic mb-2">"{customization.prompt}"</p>
+                          <p className="text-xs text-gray-500">
                             Created: {new Date(customization.created_at).toLocaleDateString()}
                           </p>
                         </div>
@@ -293,19 +349,46 @@ const Admin: React.FC = () => {
                 <div className="space-y-4">
                   {orders.map((order) => (
                     <div key={order.id} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-semibold text-gray-900">
-                            Order #{order.id.slice(-8).toUpperCase()}
-                          </h4>
-                          <p className="text-sm text-gray-500">{order.user_email}</p>
-                          <p className="text-sm text-gray-600">
-                            ${order.total_price.toFixed(2)} • {new Date(order.created_at).toLocaleDateString()}
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-4 mb-2">
+                            {/* Show image from either regular item or customization */}
+                            <img
+                              src={order.items?.image_url || order.customizations?.items?.image_url || 'https://images.pexels.com/photos/1536619/pexels-photo-1536619.jpeg?auto=compress&cs=tinysrgb&w=800'}
+                              alt={order.items?.name || order.customizations?.items?.name || 'Order Item'}
+                              className="w-16 h-20 object-cover rounded-lg"
+                            />
+                            <div>
+                              <h4 className="font-semibold text-gray-900">
+                                Order #{order.id.slice(-8).toUpperCase()}
+                              </h4>
+                              <p className="text-sm text-gray-500">{order.user_email}</p>
+                              <p className="text-sm text-gray-600">
+                                {order.customization_id ? (
+                                  <>
+                                    <span className="font-medium">Custom:</span> {order.customizations?.items?.name}
+                                    <br />
+                                    <span className="italic">"{order.customizations?.prompt}"</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="font-medium">Item:</span> {order.items?.name}
+                                  </>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Created: {new Date(order.created_at).toLocaleDateString()} • 
+                            Type: {order.customization_id ? 'Custom Design' : 'Regular Order'}
                           </p>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
-                          {order.status.replace('_', ' ').toUpperCase()}
-                        </span>
+                        <div className="ml-4 text-right">
+                          <p className="font-semibold text-gray-900 mb-2">${order.total_price.toFixed(2)}</p>
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
+                            {order.status.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}

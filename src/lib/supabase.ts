@@ -84,6 +84,7 @@ export interface Order {
   shipping_address?: any;
   created_at: string;
   items?: Item;
+  customizations?: Customization;
 }
 
 export interface CartItem {

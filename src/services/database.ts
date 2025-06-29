@@ -487,6 +487,43 @@ export const customizationsService = {
     }
   },
 
+  // Admin method to get all customizations
+  async getAll(): Promise<Customization[]> {
+    try {
+      console.log('Fetching all customizations (admin)...');
+      
+      const queryPromise = supabase
+        .from('customizations')
+        .select(`
+          *,
+          items (
+            id,
+            name,
+            price,
+            image_url,
+            category
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      const { data, error } = await Promise.race([
+        queryPromise,
+        createTimeoutPromise(5000)
+      ]);
+
+      if (error) {
+        console.error('Error fetching all customizations:', error);
+        return [];
+      }
+
+      console.log('All customizations fetched successfully:', data?.length || 0);
+      return data || [];
+    } catch (error) {
+      console.error('Error in getAll customizations:', error);
+      return [];
+    }
+  },
+
   async updateApproval(id: string, approved: boolean): Promise<boolean> {
     try {
       const queryPromise = supabase
@@ -576,7 +613,28 @@ export const ordersService = {
       const queryPromise = supabase
         .from('orders')
         .insert([{ ...order, status: order.status || 'pending' }])
-        .select()
+        .select(`
+          *,
+          items (
+            id,
+            name,
+            price,
+            image_url,
+            category
+          ),
+          customizations (
+            id,
+            prompt,
+            ai_image_url,
+            items (
+              id,
+              name,
+              price,
+              image_url,
+              category
+            )
+          )
+        `)
         .single();
 
       const { data, error } = await Promise.race([
@@ -598,6 +656,10 @@ export const ordersService = {
           created_at: new Date().toISOString()
         };
       }
+
+      // Send order confirmation email (simulated)
+      console.log('Order created successfully, sending confirmation email...');
+      await this.sendOrderConfirmationEmail(data);
 
       return data;
     } catch (error) {
@@ -629,6 +691,18 @@ export const ordersService = {
             price,
             image_url,
             category
+          ),
+          customizations (
+            id,
+            prompt,
+            ai_image_url,
+            items (
+              id,
+              name,
+              price,
+              image_url,
+              category
+            )
           )
         `)
         .eq('user_email', userEmail)
@@ -648,6 +722,55 @@ export const ordersService = {
       return data || [];
     } catch (error) {
       console.error('Error in getByUserEmail orders:', error);
+      return [];
+    }
+  },
+
+  // Admin method to get all orders
+  async getAll(): Promise<Order[]> {
+    try {
+      console.log('Fetching all orders (admin)...');
+      
+      const queryPromise = supabase
+        .from('orders')
+        .select(`
+          *,
+          items (
+            id,
+            name,
+            price,
+            image_url,
+            category
+          ),
+          customizations (
+            id,
+            prompt,
+            ai_image_url,
+            items (
+              id,
+              name,
+              price,
+              image_url,
+              category
+            )
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      const { data, error } = await Promise.race([
+        queryPromise,
+        createTimeoutPromise(5000)
+      ]);
+
+      if (error) {
+        console.error('Error fetching all orders:', error);
+        return [];
+      }
+
+      console.log('All orders fetched successfully:', data?.length || 0);
+      return data || [];
+    } catch (error) {
+      console.error('Error in getAll orders:', error);
       return [];
     }
   },
@@ -673,6 +796,71 @@ export const ordersService = {
     } catch (error) {
       console.error('Error in updateStatus:', error);
       return false;
+    }
+  },
+
+  // Simulate sending order confirmation email
+  async sendOrderConfirmationEmail(order: Order): Promise<void> {
+    try {
+      console.log('📧 Sending order confirmation email...');
+      console.log('Order Details:', {
+        orderId: order.id,
+        userEmail: order.user_email,
+        totalPrice: order.total_price,
+        status: order.status,
+        isCustomization: !!order.customization_id,
+        itemName: order.items?.name || order.customizations?.items?.name,
+        customizationPrompt: order.customizations?.prompt
+      });
+
+      // In a real application, you would integrate with an email service like:
+      // - SendGrid
+      // - Mailgun
+      // - AWS SES
+      // - Resend
+      
+      // For demo purposes, we'll just log the email content
+      const emailContent = {
+        to: order.user_email,
+        subject: `Order Confirmation - ${order.id.slice(-8).toUpperCase()}`,
+        html: `
+          <h2>Thank you for your order!</h2>
+          <p>Your order has been confirmed and is being processed.</p>
+          
+          <h3>Order Details:</h3>
+          <ul>
+            <li><strong>Order ID:</strong> ${order.id.slice(-8).toUpperCase()}</li>
+            <li><strong>Total:</strong> $${order.total_price.toFixed(2)}</li>
+            <li><strong>Status:</strong> ${order.status}</li>
+            <li><strong>Date:</strong> ${new Date(order.created_at).toLocaleDateString()}</li>
+          </ul>
+
+          ${order.customization_id ? `
+            <h3>Custom Design Details:</h3>
+            <ul>
+              <li><strong>Item:</strong> ${order.customizations?.items?.name}</li>
+              <li><strong>Customization:</strong> "${order.customizations?.prompt}"</li>
+              <li><strong>Type:</strong> AI-Generated Custom Design</li>
+            </ul>
+          ` : `
+            <h3>Item Details:</h3>
+            <ul>
+              <li><strong>Item:</strong> ${order.items?.name}</li>
+              <li><strong>Category:</strong> ${order.items?.category}</li>
+            </ul>
+          `}
+
+          <p>You will receive updates as your order progresses through production.</p>
+          
+          <p>Thank you for choosing Atelier Couture!</p>
+        `
+      };
+
+      console.log('📧 Email content prepared:', emailContent);
+      console.log('✅ Order confirmation email sent successfully (simulated)');
+      
+    } catch (error) {
+      console.error('Error sending order confirmation email:', error);
     }
   }
 };

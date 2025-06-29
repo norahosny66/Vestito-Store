@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ordersService } from '../services/database';
 import { Order } from '../lib/supabase';
-import { Package, Clock, CheckCircle, Truck, Eye } from 'lucide-react';
+import { Package, Clock, CheckCircle, Truck, Eye, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const MyOrders: React.FC = () => {
@@ -30,7 +30,7 @@ const MyOrders: React.FC = () => {
       case 'pending':
         return <Clock className="w-5 h-5 text-yellow-500" />;
       case 'paid':
-      case 'paid_deposit':
+      case 'deposit_paid':
         return <CheckCircle className="w-5 h-5 text-green-500" />;
       case 'processing':
         return <Package className="w-5 h-5 text-blue-500" />;
@@ -49,8 +49,8 @@ const MyOrders: React.FC = () => {
         return 'Payment Pending';
       case 'paid':
         return 'Paid';
-      case 'paid_deposit':
-        return 'Deposit Paid';
+      case 'deposit_paid':
+        return 'Deposit Paid - In Production';
       case 'processing':
         return 'Processing';
       case 'shipped':
@@ -67,7 +67,7 @@ const MyOrders: React.FC = () => {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'paid':
-      case 'paid_deposit':
+      case 'deposit_paid':
         return 'bg-green-100 text-green-800';
       case 'processing':
         return 'bg-blue-100 text-blue-800';
@@ -77,6 +77,19 @@ const MyOrders: React.FC = () => {
         return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const downloadCustomizationImage = (order: Order) => {
+    if (order.customizations?.ai_image_url) {
+      const link = document.createElement('a');
+      link.href = order.customizations.ai_image_url.startsWith('data:') 
+        ? order.customizations.ai_image_url 
+        : `data:image/png;base64,${order.customizations.ai_image_url}`;
+      link.download = `custom-design-${order.id.slice(-8)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -146,6 +159,11 @@ const MyOrders: React.FC = () => {
                           day: 'numeric'
                         })}
                       </p>
+                      <div className="mt-1">
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                          {order.customization_id ? 'Custom Design' : 'Regular Order'}
+                        </span>
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
@@ -160,7 +178,65 @@ const MyOrders: React.FC = () => {
 
                   {/* Order Items */}
                   <div className="border-t border-gray-200 pt-4">
-                    {order.items ? (
+                    {order.customization_id && order.customizations ? (
+                      // Custom Design Order
+                      <div className="space-y-4">
+                        <div className="flex items-start space-x-4">
+                          <div className="w-20 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                            <img
+                              src={order.customizations.items?.image_url || 'https://images.pexels.com/photos/1536619/pexels-photo-1536619.jpeg?auto=compress&cs=tinysrgb&w=800'}
+                              alt={order.customizations.items?.name || 'Custom Item'}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">
+                              Custom Design: {order.customizations.items?.name || 'Unknown Item'}
+                            </h4>
+                            <p className="text-sm text-gray-500">{order.customizations.items?.category}</p>
+                            <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                              <p className="text-sm text-amber-800">
+                                <strong>Your Customization:</strong> "{order.customizations.prompt}"
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col space-y-2">
+                            <button 
+                              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                              title="View Details"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </button>
+                            {order.customizations.ai_image_url && (
+                              <button 
+                                onClick={() => downloadCustomizationImage(order)}
+                                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                                title="Download AI Preview"
+                              >
+                                <Download className="w-5 h-5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* AI Generated Preview */}
+                        {order.customizations.ai_image_url && (
+                          <div className="mt-4">
+                            <h5 className="text-sm font-medium text-gray-700 mb-2">AI-Generated Preview:</h5>
+                            <div className="w-32 h-40 bg-gray-100 rounded-lg overflow-hidden">
+                              <img
+                                src={order.customizations.ai_image_url.startsWith('data:') 
+                                  ? order.customizations.ai_image_url 
+                                  : `data:image/png;base64,${order.customizations.ai_image_url}`}
+                                alt="AI Generated Preview"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : order.items ? (
+                      // Regular Order
                       <div className="flex items-center space-x-4">
                         <div className="w-16 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                           <img
@@ -193,12 +269,15 @@ const MyOrders: React.FC = () => {
                       {order.status === 'delivered' && (
                         <p className="text-green-600">✓ Delivered successfully</p>
                       )}
+                      {order.status === 'deposit_paid' && (
+                        <p className="text-blue-600">✓ Deposit paid - Your item is in production</p>
+                      )}
                     </div>
                     <div className="flex space-x-3">
                       <button className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                         View Details
                       </button>
-                      {order.status === 'delivered' && (
+                      {(order.status === 'delivered' || order.status === 'completed') && (
                         <button className="px-4 py-2 text-sm font-medium text-amber-600 border border-amber-300 rounded-lg hover:bg-amber-50 transition-colors">
                           Reorder
                         </button>
