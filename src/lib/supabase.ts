@@ -8,6 +8,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: false, // Disable automatic session detection from URL
+    flowType: 'pkce' // Use PKCE flow for better security
   },
   db: {
     schema: 'public',
@@ -22,21 +24,34 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Test connection on initialization with better error handling
 const testConnection = async () => {
   try {
+    console.log('🔗 Testing Supabase connection...');
+    
     const { data, error } = await supabase
       .from('items')
       .select('count', { count: 'exact', head: true });
     
     if (error) {
-      console.warn('Supabase connection issue:', error.message);
+      console.warn('⚠️ Supabase connection issue:', error.message);
       console.log('🔄 Using fallback data for better user experience');
     } else {
       console.log('✅ Supabase connected successfully');
     }
   } catch (error) {
-    console.warn('Supabase connection failed:', error);
+    console.warn('⚠️ Supabase connection failed:', error);
     console.log('🔄 Application will use fallback data');
   }
 };
+
+// Add global error handler for auth errors
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') {
+    console.log('🔄 Token refreshed successfully');
+  } else if (event === 'SIGNED_OUT') {
+    console.log('👋 User signed out');
+    // Clear any remaining session data
+    localStorage.removeItem(`sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`);
+  }
+});
 
 testConnection();
 
