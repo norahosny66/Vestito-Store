@@ -1,12 +1,12 @@
 import React from 'react';
-import Hero from '../components/home/Hero';
-import FeaturedProducts from '../components/home/FeaturedProducts';
+import PremiumHero from '../components/home/PremiumHero';
+import PremiumFeaturedProducts from '../components/home/PremiumFeaturedProducts';
 
 const Home: React.FC = () => {
   return (
     <div className="min-h-screen">
-      <Hero />
-      <FeaturedProducts />
+      <PremiumHero />
+      <PremiumFeaturedProducts />
     </div>
   );
 };
