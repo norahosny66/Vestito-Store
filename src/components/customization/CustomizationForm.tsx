@@ -40,14 +40,20 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceSuccess, setVoiceSuccess] = useState<string | null>(null);
 
   // Check Together AI configuration
   const { configured: isTogetherAIConfigured, message: configMessage } = checkTogetherAIConfig();
 
-  // Check ElevenLabs configuration
+  // Check ElevenLabs configuration with fallback
   const checkElevenLabsConfig = () => {
-    const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
-    return apiKey && apiKey !== 'your_elevenlabs_api_key_here' && apiKey.length > 10;
+    const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY || 'sk_44b44548b0a9269f46517d67484e3c1b9a0f0af429304364';
+    console.log('🔍 ElevenLabs API key check:', {
+      hasKey: !!apiKey,
+      keyLength: apiKey?.length || 0,
+      keyStart: apiKey?.substring(0, 10) + '...' || 'none'
+    });
+    return apiKey && apiKey.length > 10;
   };
 
   const isVoiceConfigured = checkElevenLabsConfig();
@@ -106,6 +112,10 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
   const startRecording = async () => {
     try {
       setVoiceError(null);
+      setVoiceSuccess(null);
+      
+      console.log('🎤 Starting voice recording...');
+      console.log('🔍 Voice configured:', isVoiceConfigured);
       
       // Check if voice is configured
       if (!isVoiceConfigured) {
@@ -113,11 +123,29 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
         return;
       }
       
+      // Check if browser supports getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setVoiceError('Voice recording not supported in this browser.');
+        return;
+      }
+      
+      console.log('🎤 Requesting microphone access...');
+      
       // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
+      });
+      
+      console.log('✅ Microphone access granted');
       
       // Create MediaRecorder instance
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
       setMediaRecorder(recorder);
       
       const chunks: Blob[] = [];
@@ -125,43 +153,62 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
       
       // Set up event listeners
       recorder.ondataavailable = (event) => {
+        console.log('📊 Audio data available:', event.data.size, 'bytes');
         if (event.data.size > 0) {
           chunks.push(event.data);
         }
       };
       
       recorder.onstop = () => {
-        stream.getTracks().forEach(track => track.stop());
+        console.log('🛑 Recording stopped, total chunks:', chunks.length);
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('🔇 Audio track stopped');
+        });
         sendAudioToElevenLabs(chunks);
       };
       
       recorder.onerror = (event) => {
-        console.error('Recording error:', event);
+        console.error('❌ Recording error:', event);
         setVoiceError('Recording failed. Please try again.');
         setIsRecording(false);
+        stream.getTracks().forEach(track => track.stop());
       };
       
       // Start recording
-      recorder.start();
+      recorder.start(1000); // Collect data every second
       setIsRecording(true);
+      console.log('🔴 Recording started');
       
       // Auto-stop after 15 seconds
       setTimeout(() => {
         if (recorder.state === 'recording') {
+          console.log('⏰ Auto-stopping recording after 15 seconds');
           recorder.stop();
           setIsRecording(false);
         }
       }, 15000);
       
     } catch (error) {
-      console.error('Error starting recording:', error);
-      setVoiceError('Microphone access denied or not available');
+      console.error('❌ Error starting recording:', error);
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          setVoiceError('Microphone access denied. Please allow microphone access and try again.');
+        } else if (error.name === 'NotFoundError') {
+          setVoiceError('No microphone found. Please connect a microphone and try again.');
+        } else {
+          setVoiceError(`Recording error: ${error.message}`);
+        }
+      } else {
+        setVoiceError('Microphone access failed. Please try again.');
+      }
+      setIsRecording(false);
     }
   };
 
   const sendAudioToElevenLabs = async (chunks: Blob[]) => {
     if (chunks.length === 0) {
-      setVoiceError('No speech detected. Please try speaking again.');
+      setVoiceError('No audio recorded. Please try speaking again.');
       return;
     }
 
@@ -169,18 +216,23 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
     setVoiceError(null);
 
     try {
+      console.log('🎤 Processing audio for transcription...');
+      console.log('📊 Audio chunks:', chunks.length, 'total size:', chunks.reduce((sum, chunk) => sum + chunk.size, 0), 'bytes');
+      
       // Create audio blob
       const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+      console.log('🎵 Audio blob created:', audioBlob.size, 'bytes');
+      
+      // Get ElevenLabs API key with fallback
+      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY || 'sk_44b44548b0a9269f46517d67484e3c1b9a0f0af429304364';
+      
+      console.log('🔑 Using ElevenLabs API key:', apiKey.substring(0, 10) + '...');
       
       // Create FormData
       const formData = new FormData();
       formData.append('audio_file', audioBlob, 'recording.webm');
-
-      // Get ElevenLabs API key
-      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY || 'sk_44b44548b0a9269f46517d67484e3c1b9a0f0af429304364';
       
-      console.log('🎤 Sending audio to ElevenLabs for transcription...');
-      console.log('🔑 Using API key:', apiKey.substring(0, 10) + '...');
+      console.log('📤 Sending audio to ElevenLabs...');
 
       const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
         method: 'POST',
@@ -191,42 +243,64 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
       });
 
       console.log('📥 ElevenLabs response status:', response.status);
+      console.log('📥 ElevenLabs response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ ElevenLabs API error:', errorText);
-        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
+        console.error('❌ ElevenLabs API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        
+        let errorMessage = `ElevenLabs API error (${response.status})`;
+        
+        if (response.status === 401) {
+          errorMessage = 'Invalid ElevenLabs API key. Voice service unavailable.';
+        } else if (response.status === 429) {
+          errorMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+        } else if (response.status === 400) {
+          errorMessage = 'Invalid audio format. Please try recording again.';
+        } else if (errorText) {
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.detail || errorData.message || errorMessage;
+          } catch (e) {
+            errorMessage = errorText.substring(0, 100);
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       console.log('🎤 Transcription result:', result);
 
       if (result.text && result.text.trim()) {
+        const transcribedText = result.text.trim();
+        console.log('✅ Transcription successful:', transcribedText);
+        
         // Prefix the transcribed text with product context
-        const prefixedText = `Make this ${productName} with ${result.text.trim()}`;
+        const prefixedText = `Make this ${productName} with ${transcribedText}`;
         
         // Update the prompt field
         setFormData(prev => ({ ...prev, prompt: prefixedText }));
         
-        console.log('✅ Voice input processed successfully');
-        
         // Show success message
-        const successMessage = `Voice input successful! Added: "${result.text.trim()}"`;
+        setVoiceSuccess(`Voice input successful! Added: "${transcribedText}"`);
         setVoiceError(null);
         
-        // Optional: Auto-trigger AI generation if we have a valid prompt
-        // setTimeout(() => {
-        //   if (isTogetherAIConfigured) {
-        //     handleSubmit(new Event('submit') as any);
-        //   }
-        // }, 500);
+        // Clear success message after 5 seconds
+        setTimeout(() => setVoiceSuccess(null), 5000);
         
       } else {
-        setVoiceError('No speech detected. Please try speaking again.');
+        console.warn('⚠️ No text in transcription result:', result);
+        setVoiceError('No speech detected. Please try speaking more clearly.');
       }
     } catch (error) {
-      console.error('Error transcribing audio:', error);
-      setVoiceError('Voice service unavailable. Please use text input.');
+      console.error('❌ Error transcribing audio:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Voice service unavailable';
+      setVoiceError(`Transcription failed: ${errorMessage}`);
     } finally {
       setIsTranscribing(false);
       setAudioChunks([]);
@@ -234,6 +308,7 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
   };
 
   const stopRecording = () => {
+    console.log('🛑 Manually stopping recording...');
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
       setIsRecording(false);
@@ -386,13 +461,13 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
           )}
 
           {/* Voice Configuration Status */}
-          {!isVoiceConfigured && (
+          {isVoiceConfigured && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center space-x-3">
                 <Mic className="w-5 h-5 text-blue-600" />
                 <div className="flex-1">
                   <h4 className="font-semibold text-blue-800">Voice Input Ready</h4>
-                  <p className="text-blue-700 text-sm">Voice customization is configured and ready to use!</p>
+                  <p className="text-blue-700 text-sm">Click the microphone button to speak your customization!</p>
                 </div>
               </div>
             </div>
@@ -404,8 +479,21 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
               <div className="flex items-center space-x-3">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
                 <div>
-                  <h4 className="font-semibold text-red-800">Voice Input Status</h4>
+                  <h4 className="font-semibold text-red-800">Voice Input Error</h4>
                   <p className="text-red-700 text-sm">{voiceError}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Voice Success Display */}
+          {voiceSuccess && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3">
+                <Mic className="w-5 h-5 text-green-600" />
+                <div>
+                  <h4 className="font-semibold text-green-800">Voice Input Success</h4>
+                  <p className="text-green-700 text-sm">{voiceSuccess}</p>
                 </div>
               </div>
             </div>
@@ -450,12 +538,12 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
                   <button
                     type="button"
                     onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isSubmitting || !isVoiceConfigured}
+                    disabled={isSubmitting}
                     className={`p-3 rounded-full transition-all duration-200 ${
                       isRecording 
                         ? 'bg-red-500 text-white animate-pulse shadow-lg' 
                         : isVoiceConfigured
-                        ? 'bg-plum-100 text-plum-600 hover:bg-plum-200'
+                        ? 'bg-plum-100 text-plum-600 hover:bg-plum-200 cursor-pointer'
                         : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     }`}
                     title={
