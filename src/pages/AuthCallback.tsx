@@ -1,18 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, AlertCircle, Loader2, Lock, Eye, EyeOff } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 const AuthCallback: React.FC = () => {
-  const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'password-reset'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const [searchParams] = useSearchParams();
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetError, setResetError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,7 +17,7 @@ const AuthCallback: React.FC = () => {
         console.log('🔍 URL params:', Object.fromEntries(searchParams.entries()));
         console.log('🔍 URL hash:', window.location.hash);
         
-        // Get all possible parameters that indicate password reset
+        // Get all possible parameters
         const type = searchParams.get('type');
         const accessToken = searchParams.get('access_token');
         const refreshToken = searchParams.get('refresh_token');
@@ -60,7 +54,7 @@ const AuthCallback: React.FC = () => {
           return;
         }
         
-        // Check if this is a password reset callback
+        // Check if this is a password reset callback - redirect to reset page
         const isPasswordReset = finalType === 'recovery' || 
                                finalType === 'password_recovery' ||
                                window.location.href.includes('type=recovery') ||
@@ -69,52 +63,23 @@ const AuthCallback: React.FC = () => {
         console.log('🔐 Is password reset?', isPasswordReset);
         
         if (isPasswordReset) {
-          console.log('🔐 Password reset callback detected');
-          console.log('🔍 Reset tokens present:', { 
-            accessToken: !!finalAccessToken, 
-            refreshToken: !!finalRefreshToken 
-          });
+          console.log('🔐 Password reset detected, redirecting to reset page...');
           
-          if (!finalAccessToken || !finalRefreshToken) {
-            console.error('❌ Missing tokens for password reset');
-            setStatus('error');
-            setMessage('Invalid password reset link. The link may be expired or malformed. Please request a new password reset.');
-            return;
+          // Construct the reset URL with all the necessary parameters
+          const resetUrl = new URL('/reset-password', window.location.origin);
+          
+          // Add all relevant parameters to the reset URL
+          if (finalAccessToken) resetUrl.searchParams.set('access_token', finalAccessToken);
+          if (finalRefreshToken) resetUrl.searchParams.set('refresh_token', finalRefreshToken);
+          if (finalType) resetUrl.searchParams.set('type', finalType);
+          
+          // Also add hash parameters if they exist
+          if (window.location.hash) {
+            resetUrl.hash = window.location.hash;
           }
-
-          try {
-            console.log('🔐 Setting session for password reset...');
-            
-            // Set the session with the tokens from the URL
-            const { data, error: sessionError } = await supabase.auth.setSession({
-              access_token: finalAccessToken,
-              refresh_token: finalRefreshToken,
-            });
-
-            if (sessionError) {
-              console.error('❌ Error setting session for password reset:', sessionError.message);
-              setStatus('error');
-              setMessage('Invalid or expired reset link. Please request a new password reset.');
-              return;
-            }
-
-            if (data.session && data.user) {
-              console.log('✅ Password reset session established for user:', data.user.email);
-              setStatus('password-reset');
-              setMessage('Please enter your new password below.');
-              
-              // Clear the URL hash to prevent issues
-              window.history.replaceState({}, document.title, window.location.pathname);
-            } else {
-              console.error('❌ No session established for password reset');
-              setStatus('error');
-              setMessage('Unable to establish reset session. Please try again.');
-            }
-          } catch (sessionError) {
-            console.error('❌ Session setup error:', sessionError);
-            setStatus('error');
-            setMessage('Failed to process reset link. Please try again.');
-          }
+          
+          console.log('🔗 Redirecting to:', resetUrl.toString());
+          window.location.replace(resetUrl.toString());
           return;
         }
         
@@ -218,65 +183,6 @@ const AuthCallback: React.FC = () => {
     handleAuthCallback();
   }, [navigate, searchParams]);
 
-  const validatePassword = (password: string) => {
-    const errors = [];
-    if (password.length < 6) errors.push('At least 6 characters');
-    return errors;
-  };
-
-  const passwordErrors = validatePassword(newPassword);
-  const isPasswordValid = passwordErrors.length === 0 && newPassword.length > 0;
-  const doPasswordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
-
-  const handlePasswordReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!isPasswordValid) {
-      setResetError('Password must be at least 6 characters');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setResetError('Passwords do not match');
-      return;
-    }
-
-    setResetLoading(true);
-    setResetError(null);
-
-    try {
-      console.log('🔐 Updating password...');
-      
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
-      if (error) {
-        console.error('❌ Password update error:', error.message);
-        setResetError(error.message);
-      } else {
-        console.log('✅ Password updated successfully');
-        
-        // Sign out the user immediately after password reset
-        console.log('👋 Signing out user after password reset...');
-        await supabase.auth.signOut();
-        
-        setStatus('success');
-        setMessage('Your password has been reset. Please sign in with your new password.');
-        
-        // Redirect to sign in page after a short delay
-        setTimeout(() => {
-          navigate('/', { replace: true });
-        }, 3000);
-      }
-    } catch (error) {
-      console.error('❌ Password reset error:', error);
-      setResetError('Failed to update password. Please try again.');
-    } finally {
-      setResetLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-amber-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
@@ -294,165 +200,20 @@ const AuthCallback: React.FC = () => {
           </div>
         )}
 
-        {status === 'password-reset' && (
-          <div>
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-white text-center">
-              <Lock className="w-12 h-12 mx-auto mb-4 opacity-90" />
-              <h2 className="text-2xl font-bold mb-2">
-                Reset Your Password
-              </h2>
-              <p className="opacity-90">
-                Create a new secure password for your account
-              </p>
-            </div>
-
-            {/* Form */}
-            <div className="p-6">
-              <form onSubmit={handlePasswordReset} className="space-y-6">
-                {resetError && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex items-center space-x-2">
-                      <AlertCircle className="w-5 h-5 text-red-500" />
-                      <p className="text-red-700 text-sm font-medium">{resetError}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* New Password */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    New Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
-                        newPassword && !isPasswordValid 
-                          ? 'border-red-300 focus:ring-red-500' 
-                          : newPassword && isPasswordValid
-                          ? 'border-green-300 focus:ring-green-500'
-                          : 'border-gray-300 focus:ring-blue-500'
-                      }`}
-                      placeholder="Enter new password"
-                      required
-                      disabled={resetLoading}
-                      minLength={6}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                  
-                  <p className="mt-2 text-xs text-gray-500">
-                    Password must be at least 6 characters long
-                  </p>
-                </div>
-
-                {/* Confirm Password */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Confirm New Password
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
-                        confirmPassword && !doPasswordsMatch 
-                          ? 'border-red-300 focus:ring-red-500' 
-                          : confirmPassword && doPasswordsMatch
-                          ? 'border-green-300 focus:ring-green-500'
-                          : 'border-gray-300 focus:ring-blue-500'
-                      }`}
-                      placeholder="Confirm new password"
-                      required
-                      disabled={resetLoading}
-                      minLength={6}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                  
-                  {confirmPassword && (
-                    <div className={`mt-2 text-xs flex items-center space-x-1 ${
-                      doPasswordsMatch ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      <div className={`w-2 h-2 rounded-full ${
-                        doPasswordsMatch ? 'bg-green-500' : 'bg-red-500'
-                      }`} />
-                      <span>{doPasswordsMatch ? 'Passwords match' : 'Passwords do not match'}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Security Notice */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start space-x-3">
-                    <Lock className="w-5 h-5 text-blue-500 mt-0.5" />
-                    <div>
-                      <p className="text-blue-800 text-sm font-medium">Security Notice</p>
-                      <p className="text-blue-700 text-xs mt-1">
-                        After updating your password, you'll be signed out and need to sign in again with your new password.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={resetLoading || !isPasswordValid || !doPasswordsMatch}
-                  className="w-full bg-blue-500 text-white font-semibold py-4 px-6 rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 text-lg"
-                >
-                  {resetLoading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Updating Password...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-5 h-5" />
-                      <span>Update Password</span>
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
-
         {status === 'success' && (
           <div className="p-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="w-8 h-8 text-green-500" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              {message.includes('Password') ? 'Password Reset Complete!' : 'Success!'}
+              Success!
             </h2>
             <p className="text-gray-600 mb-6">
               {message}
             </p>
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <p className="text-green-700 text-sm">
-                {message.includes('Password') 
-                  ? '🎉 You can now sign in with your new password. Redirecting you to the sign in page...' 
-                  : '🎉 Redirecting you to the homepage...'
-                }
+                🎉 Redirecting you to the homepage...
               </p>
             </div>
           </div>

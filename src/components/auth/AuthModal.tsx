@@ -88,6 +88,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
     try {
       console.log('🔐 Sending password reset email to:', formData.email);
       
+      // Use the correct redirect URL for password reset
       const redirectUrl = `${window.location.origin}/reset-password`;
       console.log('🔗 Using redirect URL:', redirectUrl);
       
