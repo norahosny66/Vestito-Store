@@ -53,9 +53,9 @@ const Header: React.FC = () => {
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">AC</span>
+                <span className="text-white font-bold text-sm">V</span>
               </div>
-              <span className="text-xl font-semibold text-gray-900">Atelier Couture</span>
+              <span className="text-xl font-semibold text-gray-900">Vestito</span>
             </Link>
 
             {/* Desktop Navigation */}

@@ -13,7 +13,7 @@ const Admin: React.FC = () => {
   const { user } = useAuth();
 
   // Check if user should have admin access
-  const isAdmin = user?.email === 'admin@ateliercouture.com' || 
+  const isAdmin = user?.email === 'admin@vestito.com' || 
                   user?.email?.includes('admin') || 
                   user?.email === 'admin@example.com';
 

@@ -11,9 +11,9 @@ const Footer: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">AC</span>
+                <span className="text-white font-bold text-sm">V</span>
               </div>
-              <span className="text-xl font-semibold">Atelier Couture</span>
+              <span className="text-xl font-semibold">Vestito</span>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
               Crafting bespoke fashion pieces with unparalleled attention to detail and personal style.
@@ -59,7 +59,7 @@ const Footer: React.FC = () => {
             <div className="space-y-3 text-sm">
               <div className="flex items-center space-x-3">
                 <Mail className="w-4 h-4 text-amber-500" />
-                <span className="text-gray-400">hello@ateliercouture.com</span>
+                <span className="text-gray-400">hello@vestito.com</span>
               </div>
               <div className="flex items-center space-x-3">
                 <Phone className="w-4 h-4 text-amber-500" />
@@ -75,7 +75,7 @@ const Footer: React.FC = () => {
 
         <div className="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
           <p className="text-gray-400 text-sm">
-            © 2025 Atelier Couture. All rights reserved.
+            © 2025 Vestito. All rights reserved.
           </p>
           <div className="flex items-center space-x-4 mt-4 md:mt-0">
             <Link to="/privacy" className="text-gray-400 hover:text-white text-sm transition-colors">

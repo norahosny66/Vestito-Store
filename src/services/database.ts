@@ -880,7 +880,7 @@ export const ordersService = {
 
           <p>You will receive updates as your order progresses through production.</p>
           
-          <p>Thank you for choosing Atelier Couture!</p>
+          <p>Thank you for choosing Vestito!</p>
         `
       };
 
