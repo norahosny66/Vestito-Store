@@ -82,6 +82,11 @@ export const getAuthRedirectUrl = () => {
   return `${siteUrl}/auth/callback`;
 };
 
+// Helper function to get the correct redirect URL for password reset
+export const getPasswordResetRedirectUrl = () => {
+  return `${siteUrl}/reset-password`;
+};
+
 // Database types
 export interface User {
   id: string;

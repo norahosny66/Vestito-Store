@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Mail, Lock, User, Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Link } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -10,10 +10,11 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'signin' }) => {
-  const [mode, setMode] = useState<'signin' | 'signup' | 'verification'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'signup' | 'verification' | 'reset-sent'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationEmail, setVerificationEmail] = useState<string>('');
+  const [resetEmailSent, setResetEmailSent] = useState<string>('');
   const { signIn, signUp } = useAuth();
 
   const [formData, setFormData] = useState({
@@ -52,7 +53,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
           setError(error.message);
         } else {
           console.log('✅ Sign-up successful, showing verification message');
-          // Show verification screen
           setVerificationEmail(formData.email);
           setMode('verification');
         }
@@ -71,6 +71,41 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
     } catch (err) {
       console.error('❌ Unexpected error:', err);
       setError('An unexpected error occurred');
+    }
+
+    setLoading(false);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!formData.email.trim()) {
+      setError('Please enter your email address first');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('🔐 Sending password reset email to:', formData.email);
+      
+      const redirectUrl = `${window.location.origin}/reset-password`;
+      console.log('🔗 Using redirect URL:', redirectUrl);
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) {
+        console.error('❌ Password reset error:', error.message);
+        setError(error.message);
+      } else {
+        console.log('✅ Password reset email sent successfully');
+        setResetEmailSent(formData.email);
+        setMode('reset-sent');
+      }
+    } catch (err) {
+      console.error('❌ Password reset error:', err);
+      setError('Failed to send reset email. Please try again.');
     }
 
     setLoading(false);
@@ -96,9 +131,76 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
     setMode('signin');
     resetForm();
     setVerificationEmail('');
+    setResetEmailSent('');
   };
 
-  // Verification success screen
+  // Password reset email sent screen
+  if (mode === 'reset-sent') {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl max-w-md w-full">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900">Check Your Email</h2>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6 text-center">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-8 h-8 text-blue-600" />
+            </div>
+            
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              Password Reset Link Sent
+            </h3>
+            
+            <p className="text-gray-600 mb-4">
+              A password reset link has been sent to:
+            </p>
+            
+            <div className="bg-gray-50 rounded-lg p-3 mb-6">
+              <p className="font-medium text-gray-900">{resetEmailSent}</p>
+            </div>
+            
+            <div className="space-y-3 text-sm text-gray-600 mb-6">
+              <p>Please check your email and click the reset link to set a new password.</p>
+              <p>The link will expire in 1 hour for security reasons.</p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleBackToSignIn}
+                className="w-full bg-blue-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                Back to Sign In
+              </button>
+              
+              <button
+                onClick={onClose}
+                className="w-full text-gray-600 hover:text-gray-800 font-medium"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <p className="text-xs text-gray-500">
+                Didn't receive the email? Check your spam folder or try again.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Email verification success screen
   if (mode === 'verification') {
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -305,13 +407,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
           {/* Forgot Password Link - Only show on sign in */}
           {mode === 'signin' && (
             <div className="text-right">
-              <Link
-                to="/reset-password"
-                onClick={onClose}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={loading}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
               >
-                Forgot your password?
-              </Link>
+                {loading ? 'Sending...' : 'Forgot your password?'}
+              </button>
             </div>
           )}
 
