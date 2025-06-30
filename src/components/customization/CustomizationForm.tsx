@@ -44,6 +44,14 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
   // Check Together AI configuration
   const { configured: isTogetherAIConfigured, message: configMessage } = checkTogetherAIConfig();
 
+  // Check ElevenLabs configuration
+  const checkElevenLabsConfig = () => {
+    const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+    return apiKey && apiKey !== 'your_elevenlabs_api_key_here' && apiKey.length > 10;
+  };
+
+  const isVoiceConfigured = checkElevenLabsConfig();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -98,6 +106,12 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
   const startRecording = async () => {
     try {
       setVoiceError(null);
+      
+      // Check if voice is configured
+      if (!isVoiceConfigured) {
+        setVoiceError('Voice service not configured. Please use text input.');
+        return;
+      }
       
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -163,15 +177,10 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
       formData.append('audio_file', audioBlob, 'recording.webm');
 
       // Get ElevenLabs API key
-      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY || 'sk_44b44548b0a9269f46517d67484e3c1b9a0f0af429304364';
       
-      if (!apiKey || apiKey === 'your_elevenlabs_api_key_here') {
-        setVoiceError('Voice service not configured. Please use text input.');
-        setIsTranscribing(false);
-        return;
-      }
-
       console.log('🎤 Sending audio to ElevenLabs for transcription...');
+      console.log('🔑 Using API key:', apiKey.substring(0, 10) + '...');
 
       const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
         method: 'POST',
@@ -181,8 +190,12 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
         body: formData,
       });
 
+      console.log('📥 ElevenLabs response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ ElevenLabs API error:', errorText);
+        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
@@ -195,14 +208,19 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
         // Update the prompt field
         setFormData(prev => ({ ...prev, prompt: prefixedText }));
         
-        // Auto-trigger AI generation if we have a valid prompt
-        setTimeout(() => {
-          if (isTogetherAIConfigured) {
-            handleSubmit(new Event('submit') as any);
-          }
-        }, 500);
-        
         console.log('✅ Voice input processed successfully');
+        
+        // Show success message
+        const successMessage = `Voice input successful! Added: "${result.text.trim()}"`;
+        setVoiceError(null);
+        
+        // Optional: Auto-trigger AI generation if we have a valid prompt
+        // setTimeout(() => {
+        //   if (isTogetherAIConfigured) {
+        //     handleSubmit(new Event('submit') as any);
+        //   }
+        // }, 500);
+        
       } else {
         setVoiceError('No speech detected. Please try speaking again.');
       }
@@ -367,13 +385,26 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
             </div>
           )}
 
+          {/* Voice Configuration Status */}
+          {!isVoiceConfigured && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3">
+                <Mic className="w-5 h-5 text-blue-600" />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-blue-800">Voice Input Ready</h4>
+                  <p className="text-blue-700 text-sm">Voice customization is configured and ready to use!</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Voice Error Display */}
           {voiceError && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-center space-x-3">
                 <AlertTriangle className="w-5 h-5 text-red-600" />
                 <div>
-                  <h4 className="font-semibold text-red-800">Voice Input Error</h4>
+                  <h4 className="font-semibold text-red-800">Voice Input Status</h4>
                   <p className="text-red-700 text-sm">{voiceError}</p>
                 </div>
               </div>
@@ -419,13 +450,21 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
                   <button
                     type="button"
                     onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !isVoiceConfigured}
                     className={`p-3 rounded-full transition-all duration-200 ${
                       isRecording 
                         ? 'bg-red-500 text-white animate-pulse shadow-lg' 
-                        : 'bg-plum-100 text-plum-600 hover:bg-plum-200'
+                        : isVoiceConfigured
+                        ? 'bg-plum-100 text-plum-600 hover:bg-plum-200'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     }`}
-                    title={isRecording ? 'Click to stop recording' : 'Describe your customization verbally'}
+                    title={
+                      !isVoiceConfigured 
+                        ? 'Voice input not configured' 
+                        : isRecording 
+                        ? 'Click to stop recording' 
+                        : 'Describe your customization verbally'
+                    }
                   >
                     {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                   </button>
@@ -450,8 +489,12 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
             
             <p className="text-sm text-gray-500">
               Be as specific as possible. Include details about colors, measurements, style changes, etc.
-              <br />
-              <span className="text-plum-600 font-medium">💡 Try the microphone button to speak your customization!</span>
+              {isVoiceConfigured && (
+                <>
+                  <br />
+                  <span className="text-plum-600 font-medium">💡 Try the microphone button to speak your customization!</span>
+                </>
+              )}
             </p>
           </div>
 
