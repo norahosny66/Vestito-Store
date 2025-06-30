@@ -19,90 +19,129 @@ const AuthCallback: React.FC = () => {
     const handleAuthCallback = async () => {
       try {
         console.log('🔗 Processing auth callback...');
+        console.log('🔍 Current URL:', window.location.href);
         console.log('🔍 URL params:', Object.fromEntries(searchParams.entries()));
         
-        // Check if this is a password reset callback
+        // Get all possible parameters that indicate password reset
         const type = searchParams.get('type');
         const accessToken = searchParams.get('access_token');
         const refreshToken = searchParams.get('refresh_token');
+        const error = searchParams.get('error');
+        const errorDescription = searchParams.get('error_description');
         
-        if (type === 'recovery' && accessToken && refreshToken) {
+        // Check for error first
+        if (error) {
+          console.error('❌ Auth callback error from URL:', error, errorDescription);
+          setStatus('error');
+          setMessage(errorDescription || error);
+          return;
+        }
+        
+        // Check if this is a password reset callback
+        // Password reset URLs contain type=recovery or have access_token + refresh_token
+        const isPasswordReset = type === 'recovery' || 
+                               type === 'password_recovery' ||
+                               (accessToken && refreshToken && window.location.hash.includes('type=recovery'));
+        
+        if (isPasswordReset) {
           console.log('🔐 Password reset callback detected');
+          console.log('🔍 Reset tokens present:', { accessToken: !!accessToken, refreshToken: !!refreshToken });
           
-          // Set the session with the tokens from the URL
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-
-          if (error) {
-            console.error('❌ Error setting session for password reset:', error.message);
+          if (!accessToken || !refreshToken) {
+            console.error('❌ Missing tokens for password reset');
             setStatus('error');
-            setMessage('Invalid or expired reset link. Please request a new password reset.');
+            setMessage('Invalid password reset link. Please request a new password reset.');
             return;
           }
 
-          if (data.session) {
-            console.log('✅ Password reset session established');
-            setStatus('password-reset');
-            setMessage('Please enter your new password below.');
-          } else {
+          try {
+            // Set the session with the tokens from the URL
+            const { data, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) {
+              console.error('❌ Error setting session for password reset:', sessionError.message);
+              setStatus('error');
+              setMessage('Invalid or expired reset link. Please request a new password reset.');
+              return;
+            }
+
+            if (data.session && data.user) {
+              console.log('✅ Password reset session established for user:', data.user.email);
+              setStatus('password-reset');
+              setMessage('Please enter your new password below.');
+            } else {
+              console.error('❌ No session established for password reset');
+              setStatus('error');
+              setMessage('Unable to establish reset session. Please try again.');
+            }
+          } catch (sessionError) {
+            console.error('❌ Session setup error:', sessionError);
             setStatus('error');
-            setMessage('Unable to establish reset session. Please try again.');
+            setMessage('Failed to process reset link. Please try again.');
           }
           return;
         }
         
-        // Handle email verification
-        const { data, error } = await supabase.auth.getSession();
+        // Handle regular auth callback (email verification, sign-in, etc.)
+        console.log('📧 Processing regular auth callback...');
         
-        if (error) {
-          console.error('❌ Auth callback error:', error.message);
+        // Use getSession to handle the callback
+        const { data, error: authError } = await supabase.auth.getSession();
+        
+        if (authError) {
+          console.error('❌ Auth callback error:', authError.message);
           setStatus('error');
-          setMessage(error.message);
+          setMessage(authError.message);
           return;
         }
 
-        if (data.session) {
-          console.log('✅ Email verification successful');
-          setStatus('success');
-          setMessage('Email verified successfully! Redirecting to sign in...');
+        if (data.session && data.user) {
+          console.log('✅ Auth callback successful for user:', data.user.email);
+          
+          // Check if this is email verification
+          if (data.user.email_confirmed_at) {
+            setStatus('success');
+            setMessage('Email verified successfully! Redirecting...');
+          } else {
+            setStatus('success');
+            setMessage('Authentication successful! Redirecting...');
+          }
           
           // Create user profile if it doesn't exist
-          const user = data.session.user;
-          if (user) {
-            try {
-              const { data: existingProfile } = await supabase
+          try {
+            const { data: existingProfile } = await supabase
+              .from('User')
+              .select('*')
+              .eq('email', data.user.email!)
+              .maybeSingle();
+
+            if (!existingProfile) {
+              console.log('👤 Creating user profile...');
+              
+              const firstName = data.user.user_metadata?.first_name || data.user.email?.split('@')[0] || 'User';
+              const secondName = data.user.user_metadata?.second_name || '';
+              
+              const { error: profileError } = await supabase
                 .from('User')
-                .select('*')
-                .eq('email', user.email!)
-                .maybeSingle();
+                .insert([
+                  {
+                    email: data.user.email!,
+                    first_name: firstName,
+                    second_name: secondName,
+                  }
+                ]);
 
-              if (!existingProfile) {
-                console.log('👤 Creating user profile...');
-                
-                const firstName = user.user_metadata?.first_name || user.email?.split('@')[0] || 'User';
-                const secondName = user.user_metadata?.second_name || '';
-                
-                const { error: profileError } = await supabase
-                  .from('User')
-                  .insert([
-                    {
-                      email: user.email!,
-                      first_name: firstName,
-                      second_name: secondName,
-                    }
-                  ]);
-
-                if (profileError) {
-                  console.error('❌ Error creating user profile:', profileError.message);
-                } else {
-                  console.log('✅ User profile created successfully');
-                }
+              if (profileError) {
+                console.error('❌ Error creating user profile:', profileError.message);
+              } else {
+                console.log('✅ User profile created successfully');
               }
-            } catch (profileError) {
-              console.error('❌ Profile creation error:', profileError);
             }
+          } catch (profileError) {
+            console.error('❌ Profile creation error:', profileError);
           }
           
           // Redirect to home page after a short delay
@@ -112,12 +151,12 @@ const AuthCallback: React.FC = () => {
         } else {
           console.log('⚠️ No session found in callback');
           setStatus('error');
-          setMessage('No session found. Please try signing up again.');
+          setMessage('No active session found. Please try signing in again.');
         }
       } catch (error) {
         console.error('❌ Callback processing error:', error);
         setStatus('error');
-        setMessage('An error occurred during verification. Please try again.');
+        setMessage('An error occurred during authentication. Please try again.');
       }
     };
 
@@ -193,10 +232,10 @@ const AuthCallback: React.FC = () => {
               <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Verifying Your Email
+              Processing Request
             </h2>
             <p className="text-gray-600">
-              Please wait while we verify your email address...
+              Please wait while we process your authentication...
             </p>
           </div>
         )}
@@ -365,7 +404,7 @@ const AuthCallback: React.FC = () => {
               <CheckCircle className="w-8 h-8 text-green-500" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              {message.includes('Password') ? 'Password Updated!' : 'Email Verified!'}
+              {message.includes('Password') ? 'Password Updated!' : 'Success!'}
             </h2>
             <p className="text-gray-600 mb-6">
               {message}
@@ -374,7 +413,7 @@ const AuthCallback: React.FC = () => {
               <p className="text-green-700 text-sm">
                 {message.includes('Password') 
                   ? '🎉 You can now sign in with your new password. Redirecting you to the homepage...' 
-                  : '🎉 Your account is now active! Redirecting you to the homepage...'
+                  : '🎉 Redirecting you to the homepage...'
                 }
               </p>
             </div>
@@ -387,7 +426,7 @@ const AuthCallback: React.FC = () => {
               <AlertCircle className="w-8 h-8 text-red-500" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Verification Failed
+              Something Went Wrong
             </h2>
             <p className="text-gray-600 mb-6">
               {message}
