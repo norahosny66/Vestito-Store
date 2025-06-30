@@ -65,20 +65,22 @@ const AuthCallback: React.FC = () => {
         if (isPasswordReset) {
           console.log('🔐 Password reset detected, redirecting to reset page...');
           
-          // Construct the reset URL with all the necessary parameters
+          // Build the complete URL with all parameters preserved
           const resetUrl = new URL('/reset-password', window.location.origin);
           
-          // Add all relevant parameters to the reset URL
-          if (finalAccessToken) resetUrl.searchParams.set('access_token', finalAccessToken);
-          if (finalRefreshToken) resetUrl.searchParams.set('refresh_token', finalRefreshToken);
-          if (finalType) resetUrl.searchParams.set('type', finalType);
+          // Copy all search parameters to the reset URL
+          searchParams.forEach((value, key) => {
+            resetUrl.searchParams.set(key, value);
+          });
           
-          // Also add hash parameters if they exist
+          // Also preserve hash if it exists
           if (window.location.hash) {
             resetUrl.hash = window.location.hash;
           }
           
-          console.log('🔗 Redirecting to:', resetUrl.toString());
+          console.log('🔗 Redirecting to reset page with URL:', resetUrl.toString());
+          
+          // Use replace to avoid back button issues
           window.location.replace(resetUrl.toString());
           return;
         }
