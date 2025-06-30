@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
-import { supabase, User } from '../lib/supabase';
+import { supabase, User, getAuthRedirectUrl } from '../lib/supabase';
 
 interface AuthContextType {
   user: SupabaseUser | null;
@@ -25,17 +25,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Get the correct redirect URL based on environment
-  const getRedirectUrl = () => {
-    // Check if we're in production (deployed)
-    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      return `${window.location.origin}/auth/callback`;
-    }
-    
-    // For local development, use the dev server URL
-    return `${window.location.origin}/auth/callback`;
-  };
 
   // Clear all session data completely
   const clearSessionData = async () => {
@@ -197,8 +186,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Clear any existing session first
       await clearSessionData();
       
-      const redirectUrl = getRedirectUrl();
-      console.log('🔗 Using redirect URL:', redirectUrl);
+      const redirectUrl = getAuthRedirectUrl();
+      console.log('🔗 Using redirect URL for sign-up:', redirectUrl);
       
       // Sign up with Supabase Auth (this will send verification email)
       const { data, error } = await supabase.auth.signUp({

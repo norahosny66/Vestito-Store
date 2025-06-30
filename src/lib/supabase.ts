@@ -4,12 +4,30 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://iidpiqbdilfrydxhviwt.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpZHBpcWJkaWxmcnlkeGh2aXd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEwNzY5NjcsImV4cCI6MjA2NjY1Mjk2N30._tYbzXPYowhKrwCQfACxAGbz4DPwty0Acp1y929Aiks';
 
+// Get the correct site URL based on environment
+const getSiteUrl = () => {
+  // Check if we're in production (deployed)
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    
+    // If it's not localhost, use the current origin
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return window.location.origin;
+    }
+  }
+  
+  // For localhost development, use the dev server URL
+  return 'http://localhost:5173'; // Vite's default port
+};
+
+const siteUrl = getSiteUrl();
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true, // Enable session detection from URL for email verification
-    flowType: 'pkce' // Use PKCE flow for better security
+    detectSessionInUrl: true,
+    flowType: 'pkce'
   },
   db: {
     schema: 'public',
@@ -25,6 +43,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 const testConnection = async () => {
   try {
     console.log('🔗 Testing Supabase connection...');
+    console.log('🌐 Site URL:', siteUrl);
+    console.log('🔗 Supabase URL:', supabaseUrl);
     
     const { data, error } = await supabase
       .from('items')
@@ -56,6 +76,11 @@ supabase.auth.onAuthStateChange((event, session) => {
 });
 
 testConnection();
+
+// Helper function to get the correct redirect URL for auth operations
+export const getAuthRedirectUrl = () => {
+  return `${siteUrl}/auth/callback`;
+};
 
 // Database types
 export interface User {

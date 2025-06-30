@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Mail, Lock, User, Loader2, CheckCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { supabase, getAuthRedirectUrl } from '../../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -24,22 +24,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
     secondName: '',
     confirmPassword: ''
   });
-
-  // Get the correct redirect URL based on environment
-  const getRedirectUrl = () => {
-    // Always use the current origin for the redirect URL
-    const origin = window.location.origin;
-    
-    // For deployed sites, this will be the actual domain
-    // For localhost, this will be localhost with the correct port
-    const redirectUrl = `${origin}/auth/callback`;
-    
-    console.log('🔗 Redirect URL determined:', redirectUrl);
-    console.log('🌐 Current origin:', origin);
-    console.log('🏠 Current hostname:', window.location.hostname);
-    
-    return redirectUrl;
-  };
 
   if (!isOpen) return null;
 
@@ -101,10 +85,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
     try {
       console.log('🔐 Sending password reset email to:', resetEmail);
       
-      const redirectUrl = getRedirectUrl();
+      const redirectUrl = getAuthRedirectUrl();
       console.log('🔗 Using redirect URL for password reset:', redirectUrl);
       
-      // IMPORTANT: Use the exact same domain format that Supabase expects
+      // IMPORTANT: Use the helper function to get the correct redirect URL
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: redirectUrl,
       });
@@ -202,19 +186,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
                 <p className="text-green-700 text-xs">
                   <strong>✅ Reset Process:</strong><br />
                   1. Check your email for the reset link<br />
-                  2. Click the link to open the password reset form<br />
+                  2. Click the link to open the password reset form on our website<br />
                   3. Enter your new password<br />
                   4. Sign in with your new password
                 </p>
               </div>
               
-              {currentDomain.includes('localhost') && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
-                  <p className="text-amber-700 text-xs">
-                    <strong>⚠️ Local Development:</strong> Make sure your dev server is running when you click the reset link.
-                  </p>
-                </div>
-              )}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                <p className="text-blue-700 text-xs">
+                  <strong>🔗 Reset URL:</strong> The link will redirect you to <code>{currentDomain}/auth/callback</code> where you can safely reset your password.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -302,8 +284,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 's
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-blue-700 text-sm">
                 <strong>How it works:</strong><br />
-                We'll send you a secure link that will redirect you to a password reset form on our website. 
-                You'll be able to set a new password safely and securely.
+                We'll send you a secure link that will redirect you to <strong>{currentDomain}</strong> where you can safely set a new password.
               </p>
             </div>
 
