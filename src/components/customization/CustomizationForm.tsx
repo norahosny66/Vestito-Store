@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wand2, Upload, Palette, Ruler, Shirt, Loader2, AlertTriangle, Settings } from 'lucide-react';
+import { Wand2, Upload, Palette, Ruler, Shirt, Loader2, AlertTriangle, Settings, Mic, MicOff } from 'lucide-react';
 import { generateCustomizedImage, checkTogetherAIConfig } from '../../services/togetherAI';
 
 interface CustomizationFormProps {
@@ -33,6 +33,13 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string>('');
   const [showApiKeyHelp, setShowApiKeyHelp] = useState(false);
+
+  // Voice recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   // Check Together AI configuration
   const { configured: isTogetherAIConfigured, message: configMessage } = checkTogetherAIConfig();
@@ -85,6 +92,133 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
       } else {
         alert(`Error generating customized design: ${errorMessage}\n\nPlease try again or contact support if the issue persists.`);
       }
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      setVoiceError(null);
+      
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Create MediaRecorder instance
+      const recorder = new MediaRecorder(stream);
+      setMediaRecorder(recorder);
+      
+      const chunks: Blob[] = [];
+      setAudioChunks(chunks);
+      
+      // Set up event listeners
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+      
+      recorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+        sendAudioToElevenLabs(chunks);
+      };
+      
+      recorder.onerror = (event) => {
+        console.error('Recording error:', event);
+        setVoiceError('Recording failed. Please try again.');
+        setIsRecording(false);
+      };
+      
+      // Start recording
+      recorder.start();
+      setIsRecording(true);
+      
+      // Auto-stop after 15 seconds
+      setTimeout(() => {
+        if (recorder.state === 'recording') {
+          recorder.stop();
+          setIsRecording(false);
+        }
+      }, 15000);
+      
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      setVoiceError('Microphone access denied or not available');
+    }
+  };
+
+  const sendAudioToElevenLabs = async (chunks: Blob[]) => {
+    if (chunks.length === 0) {
+      setVoiceError('No speech detected. Please try speaking again.');
+      return;
+    }
+
+    setIsTranscribing(true);
+    setVoiceError(null);
+
+    try {
+      // Create audio blob
+      const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+      
+      // Create FormData
+      const formData = new FormData();
+      formData.append('audio_file', audioBlob, 'recording.webm');
+
+      // Get ElevenLabs API key
+      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+      
+      if (!apiKey || apiKey === 'your_elevenlabs_api_key_here') {
+        setVoiceError('Voice service not configured. Please use text input.');
+        setIsTranscribing(false);
+        return;
+      }
+
+      console.log('🎤 Sending audio to ElevenLabs for transcription...');
+
+      const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+        method: 'POST',
+        headers: {
+          'xi-api-key': apiKey,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`ElevenLabs API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('🎤 Transcription result:', result);
+
+      if (result.text && result.text.trim()) {
+        // Prefix the transcribed text with product context
+        const prefixedText = `Make this ${productName} with ${result.text.trim()}`;
+        
+        // Update the prompt field
+        setFormData(prev => ({ ...prev, prompt: prefixedText }));
+        
+        // Auto-trigger AI generation if we have a valid prompt
+        setTimeout(() => {
+          if (isTogetherAIConfigured) {
+            handleSubmit(new Event('submit') as any);
+          }
+        }, 500);
+        
+        console.log('✅ Voice input processed successfully');
+      } else {
+        setVoiceError('No speech detected. Please try speaking again.');
+      }
+    } catch (error) {
+      console.error('Error transcribing audio:', error);
+      setVoiceError('Voice service unavailable. Please use text input.');
+    } finally {
+      setIsTranscribing(false);
+      setAudioChunks([]);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
+      setIsRecording(false);
     }
   };
 
@@ -233,6 +367,19 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
             </div>
           )}
 
+          {/* Voice Error Display */}
+          {voiceError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+                <div>
+                  <h4 className="font-semibold text-red-800">Voice Input Error</h4>
+                  <p className="text-red-700 text-sm">{voiceError}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Original Product Preview */}
           <div className="space-y-3">
             <label className="block text-sm font-semibold text-gray-900">
@@ -247,21 +394,64 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
             </div>
           </div>
 
-          {/* Customization Prompt */}
+          {/* Customization Prompt with Voice Input */}
           <div className="space-y-3">
             <label className="block text-sm font-semibold text-gray-900">
               Describe Your Customization *
             </label>
-            <textarea
-              value={formData.prompt}
-              onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
-              placeholder="Describe in detail how you'd like us to modify this piece..."
-              className="w-full h-32 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              required
-              disabled={isSubmitting}
-            />
+            <div className="relative">
+              <textarea
+                value={formData.prompt}
+                onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
+                placeholder="Describe in detail how you'd like us to modify this piece..."
+                className="w-full h-32 p-4 pr-16 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                required
+                disabled={isSubmitting || isRecording || isTranscribing}
+              />
+              
+              {/* Voice Input Button */}
+              <div className="absolute bottom-4 right-4">
+                {isTranscribing ? (
+                  <div className="p-3 bg-blue-100 rounded-full">
+                    <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={isRecording ? stopRecording : startRecording}
+                    disabled={isSubmitting}
+                    className={`p-3 rounded-full transition-all duration-200 ${
+                      isRecording 
+                        ? 'bg-red-500 text-white animate-pulse shadow-lg' 
+                        : 'bg-plum-100 text-plum-600 hover:bg-plum-200'
+                    }`}
+                    title={isRecording ? 'Click to stop recording' : 'Describe your customization verbally'}
+                  >
+                    {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            {/* Voice Input Status */}
+            {isRecording && (
+              <div className="flex items-center space-x-2 text-sm text-red-600">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span>Recording... (auto-stops in 15s)</span>
+              </div>
+            )}
+            
+            {isTranscribing && (
+              <div className="flex items-center space-x-2 text-sm text-blue-600">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Converting speech to text...</span>
+              </div>
+            )}
+            
             <p className="text-sm text-gray-500">
               Be as specific as possible. Include details about colors, measurements, style changes, etc.
+              <br />
+              <span className="text-plum-600 font-medium">💡 Try the microphone button to speak your customization!</span>
             </p>
           </div>
 
@@ -276,7 +466,7 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
                   key={index}
                   type="button"
                   onClick={() => setFormData({ ...formData, prompt: example })}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isRecording || isTranscribing}
                   className="text-left p-3 text-sm bg-gray-50 hover:bg-amber-50 hover:text-amber-700 rounded-lg transition-colors disabled:opacity-50"
                 >
                   "{example}"
@@ -304,7 +494,7 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
                     value={id}
                     checked={formData.category === id}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isRecording || isTranscribing}
                     className="text-amber-500 focus:ring-amber-500"
                   />
                   <Icon className="w-5 h-5 text-gray-500" />
@@ -322,7 +512,7 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
             <select
               value={formData.urgency}
               onChange={(e) => setFormData({ ...formData, urgency: e.target.value })}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isRecording || isTranscribing}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
             >
               <option value="standard">Standard (5-7 business days) - Free</option>
@@ -341,7 +531,7 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
               value={formData.contactEmail}
               onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
               placeholder="your.email@example.com"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isRecording || isTranscribing}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               required
             />
@@ -368,14 +558,14 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
             <button
               type="button"
               onClick={onClose}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isRecording || isTranscribing}
               className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !formData.prompt.trim() || !formData.contactEmail.trim() || !isTogetherAIConfigured}
+              disabled={isSubmitting || !formData.prompt.trim() || !formData.contactEmail.trim() || !isTogetherAIConfigured || isRecording || isTranscribing}
               className="flex-1 px-6 py-3 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
             >
               {isSubmitting ? (
@@ -385,6 +575,10 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
                 </>
               ) : !isTogetherAIConfigured ? (
                 <span>Setup Required</span>
+              ) : isRecording ? (
+                <span>Recording...</span>
+              ) : isTranscribing ? (
+                <span>Processing Voice...</span>
               ) : (
                 <span>Generate Custom Design</span>
               )}
