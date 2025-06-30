@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Wand2, Upload, Palette, Ruler, Shirt, Loader2 } from 'lucide-react';
-import { generateCustomizedImage } from '../../services/togetherAI';
+import { Wand2, Upload, Palette, Ruler, Shirt, Loader2, AlertTriangle, Settings } from 'lucide-react';
+import { generateCustomizedImage, checkTogetherAIConfig } from '../../services/togetherAI';
 
 interface CustomizationFormProps {
   onSubmit: (customization: CustomizationData) => void;
@@ -32,9 +32,19 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string>('');
+  const [showApiKeyHelp, setShowApiKeyHelp] = useState(false);
+
+  // Check Together AI configuration
+  const { configured: isTogetherAIConfigured, message: configMessage } = checkTogetherAIConfig();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isTogetherAIConfigured) {
+      setShowApiKeyHelp(true);
+      return;
+    }
+    
     setIsSubmitting(true);
     setGenerationStatus('Generating your customized design...');
     
@@ -67,8 +77,14 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
       setGenerationStatus('');
       setIsSubmitting(false);
       
-      // Show error to user
-      alert(`Error generating customized design: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease check your API key and try again.`);
+      // Show error to user with helpful message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      if (errorMessage.includes('API key')) {
+        setShowApiKeyHelp(true);
+      } else {
+        alert(`Error generating customized design: ${errorMessage}\n\nPlease try again or contact support if the issue persists.`);
+      }
     }
   };
 
@@ -79,6 +95,98 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
     "Add a belt and make it more fitted at the waist",
     "Convert to off-shoulder style with flowing fabric"
   ];
+
+  // API Key Help Modal
+  if (showApiKeyHelp) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">API Configuration Required</h2>
+                  <p className="text-gray-600">Together AI API key is needed for AI customization</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowApiKeyHelp(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <h3 className="font-semibold text-red-800 mb-2">Configuration Issue</h3>
+              <p className="text-red-700 text-sm">{configMessage}</p>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900">How to Fix This:</h3>
+              
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-800 mb-2">Step 1: Get Your API Key</h4>
+                  <ol className="text-blue-700 text-sm space-y-1 list-decimal list-inside">
+                    <li>Visit <a href="https://api.together.xyz/settings/api-keys" target="_blank" rel="noopener noreferrer" className="underline">Together AI API Keys</a></li>
+                    <li>Sign up or log in to your account</li>
+                    <li>Create a new API key</li>
+                    <li>Copy the API key (starts with something like "abc123...")</li>
+                  </ol>
+                </div>
+
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-800 mb-2">Step 2: Configure for Netlify</h4>
+                  <ol className="text-green-700 text-sm space-y-1 list-decimal list-inside">
+                    <li>Go to your <a href="https://app.netlify.com" target="_blank" rel="noopener noreferrer" className="underline">Netlify Dashboard</a></li>
+                    <li>Select your site (vestitostore)</li>
+                    <li>Go to Site settings → Environment variables</li>
+                    <li>Add a new variable:
+                      <div className="bg-white border rounded p-2 mt-1 font-mono text-xs">
+                        <strong>Key:</strong> VITE_TOGETHER_API_KEY<br/>
+                        <strong>Value:</strong> [your API key here]
+                      </div>
+                    </li>
+                    <li>Save and redeploy your site</li>
+                  </ol>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-amber-800 mb-2">Step 3: Test</h4>
+                  <p className="text-amber-700 text-sm">
+                    After adding the environment variable and redeploying, refresh this page and try the customization feature again.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex space-x-4">
+              <button
+                onClick={() => setShowApiKeyHelp(false)}
+                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+              <a
+                href="https://api.together.xyz/settings/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors text-center"
+              >
+                Get API Key
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -105,6 +213,26 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* API Configuration Status */}
+          {!isTogetherAIConfigured && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-center space-x-3">
+                <Settings className="w-5 h-5 text-amber-600" />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-amber-800">Setup Required</h4>
+                  <p className="text-amber-700 text-sm">{configMessage}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowApiKeyHelp(true)}
+                  className="px-3 py-1 bg-amber-600 text-white text-sm rounded hover:bg-amber-700 transition-colors"
+                >
+                  Fix Now
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Original Product Preview */}
           <div className="space-y-3">
             <label className="block text-sm font-semibold text-gray-900">
@@ -247,7 +375,7 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !formData.prompt.trim() || !formData.contactEmail.trim()}
+              disabled={isSubmitting || !formData.prompt.trim() || !formData.contactEmail.trim() || !isTogetherAIConfigured}
               className="flex-1 px-6 py-3 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
             >
               {isSubmitting ? (
@@ -255,6 +383,8 @@ const CustomizationForm: React.FC<CustomizationFormProps> = ({
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Generating...</span>
                 </>
+              ) : !isTogetherAIConfigured ? (
+                <span>Setup Required</span>
               ) : (
                 <span>Generate Custom Design</span>
               )}

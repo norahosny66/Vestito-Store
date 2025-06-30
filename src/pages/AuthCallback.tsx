@@ -21,6 +21,7 @@ const AuthCallback: React.FC = () => {
         console.log('🔗 Processing auth callback...');
         console.log('🔍 Current URL:', window.location.href);
         console.log('🔍 URL params:', Object.fromEntries(searchParams.entries()));
+        console.log('🔍 URL hash:', window.location.hash);
         
         // Get all possible parameters that indicate password reset
         const type = searchParams.get('type');
@@ -29,36 +30,65 @@ const AuthCallback: React.FC = () => {
         const error = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
         
+        // Also check hash parameters (Supabase sometimes puts tokens in hash)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const hashType = hashParams.get('type');
+        const hashAccessToken = hashParams.get('access_token');
+        const hashRefreshToken = hashParams.get('refresh_token');
+        const hashError = hashParams.get('error');
+        
+        console.log('🔍 Hash params:', Object.fromEntries(hashParams.entries()));
+        
+        // Use hash parameters if query parameters are not available
+        const finalType = type || hashType;
+        const finalAccessToken = accessToken || hashAccessToken;
+        const finalRefreshToken = refreshToken || hashRefreshToken;
+        const finalError = error || hashError;
+        
+        console.log('🔍 Final params:', {
+          type: finalType,
+          hasAccessToken: !!finalAccessToken,
+          hasRefreshToken: !!finalRefreshToken,
+          error: finalError
+        });
+        
         // Check for error first
-        if (error) {
-          console.error('❌ Auth callback error from URL:', error, errorDescription);
+        if (finalError) {
+          console.error('❌ Auth callback error from URL:', finalError, errorDescription);
           setStatus('error');
-          setMessage(errorDescription || error);
+          setMessage(errorDescription || finalError);
           return;
         }
         
         // Check if this is a password reset callback
-        // Password reset URLs contain type=recovery or have access_token + refresh_token
-        const isPasswordReset = type === 'recovery' || 
-                               type === 'password_recovery' ||
-                               (accessToken && refreshToken && window.location.hash.includes('type=recovery'));
+        const isPasswordReset = finalType === 'recovery' || 
+                               finalType === 'password_recovery' ||
+                               window.location.href.includes('type=recovery') ||
+                               window.location.href.includes('password_recovery');
+        
+        console.log('🔐 Is password reset?', isPasswordReset);
         
         if (isPasswordReset) {
           console.log('🔐 Password reset callback detected');
-          console.log('🔍 Reset tokens present:', { accessToken: !!accessToken, refreshToken: !!refreshToken });
+          console.log('🔍 Reset tokens present:', { 
+            accessToken: !!finalAccessToken, 
+            refreshToken: !!finalRefreshToken 
+          });
           
-          if (!accessToken || !refreshToken) {
+          if (!finalAccessToken || !finalRefreshToken) {
             console.error('❌ Missing tokens for password reset');
             setStatus('error');
-            setMessage('Invalid password reset link. Please request a new password reset.');
+            setMessage('Invalid password reset link. The link may be expired or malformed. Please request a new password reset.');
             return;
           }
 
           try {
+            console.log('🔐 Setting session for password reset...');
+            
             // Set the session with the tokens from the URL
             const { data, error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
+              access_token: finalAccessToken,
+              refresh_token: finalRefreshToken,
             });
 
             if (sessionError) {
@@ -72,6 +102,9 @@ const AuthCallback: React.FC = () => {
               console.log('✅ Password reset session established for user:', data.user.email);
               setStatus('password-reset');
               setMessage('Please enter your new password below.');
+              
+              // Clear the URL hash to prevent issues
+              window.history.replaceState({}, document.title, window.location.pathname);
             } else {
               console.error('❌ No session established for password reset');
               setStatus('error');
@@ -88,66 +121,32 @@ const AuthCallback: React.FC = () => {
         // Handle regular auth callback (email verification, sign-in, etc.)
         console.log('📧 Processing regular auth callback...');
         
-        // Use getSession to handle the callback
-        const { data, error: authError } = await supabase.auth.getSession();
+        // Try to exchange the code for a session
+        const { data, error: authError } = await supabase.auth.exchangeCodeForSession(
+          window.location.href
+        );
         
         if (authError) {
           console.error('❌ Auth callback error:', authError.message);
-          setStatus('error');
-          setMessage(authError.message);
+          
+          // If code exchange fails, try getting existing session
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError || !sessionData.session) {
+            setStatus('error');
+            setMessage(authError.message || 'Authentication failed. Please try signing in again.');
+            return;
+          }
+          
+          // Use existing session
+          console.log('✅ Using existing session');
+          await handleSuccessfulAuth(sessionData.session, sessionData.user);
           return;
         }
 
         if (data.session && data.user) {
           console.log('✅ Auth callback successful for user:', data.user.email);
-          
-          // Check if this is email verification
-          if (data.user.email_confirmed_at) {
-            setStatus('success');
-            setMessage('Email verified successfully! Redirecting...');
-          } else {
-            setStatus('success');
-            setMessage('Authentication successful! Redirecting...');
-          }
-          
-          // Create user profile if it doesn't exist
-          try {
-            const { data: existingProfile } = await supabase
-              .from('User')
-              .select('*')
-              .eq('email', data.user.email!)
-              .maybeSingle();
-
-            if (!existingProfile) {
-              console.log('👤 Creating user profile...');
-              
-              const firstName = data.user.user_metadata?.first_name || data.user.email?.split('@')[0] || 'User';
-              const secondName = data.user.user_metadata?.second_name || '';
-              
-              const { error: profileError } = await supabase
-                .from('User')
-                .insert([
-                  {
-                    email: data.user.email!,
-                    first_name: firstName,
-                    second_name: secondName,
-                  }
-                ]);
-
-              if (profileError) {
-                console.error('❌ Error creating user profile:', profileError.message);
-              } else {
-                console.log('✅ User profile created successfully');
-              }
-            }
-          } catch (profileError) {
-            console.error('❌ Profile creation error:', profileError);
-          }
-          
-          // Redirect to home page after a short delay
-          setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 2000);
+          await handleSuccessfulAuth(data.session, data.user);
         } else {
           console.log('⚠️ No session found in callback');
           setStatus('error');
@@ -157,6 +156,62 @@ const AuthCallback: React.FC = () => {
         console.error('❌ Callback processing error:', error);
         setStatus('error');
         setMessage('An error occurred during authentication. Please try again.');
+      }
+    };
+
+    const handleSuccessfulAuth = async (session: any, user: any) => {
+      try {
+        // Check if this is email verification
+        if (user.email_confirmed_at) {
+          setStatus('success');
+          setMessage('Email verified successfully! Redirecting...');
+        } else {
+          setStatus('success');
+          setMessage('Authentication successful! Redirecting...');
+        }
+        
+        // Create user profile if it doesn't exist
+        try {
+          const { data: existingProfile } = await supabase
+            .from('User')
+            .select('*')
+            .eq('email', user.email!)
+            .maybeSingle();
+
+          if (!existingProfile) {
+            console.log('👤 Creating user profile...');
+            
+            const firstName = user.user_metadata?.first_name || user.email?.split('@')[0] || 'User';
+            const secondName = user.user_metadata?.second_name || '';
+            
+            const { error: profileError } = await supabase
+              .from('User')
+              .insert([
+                {
+                  email: user.email!,
+                  first_name: firstName,
+                  second_name: secondName,
+                }
+              ]);
+
+            if (profileError) {
+              console.error('❌ Error creating user profile:', profileError.message);
+            } else {
+              console.log('✅ User profile created successfully');
+            }
+          }
+        } catch (profileError) {
+          console.error('❌ Profile creation error:', profileError);
+        }
+        
+        // Redirect to home page after a short delay
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 2000);
+      } catch (error) {
+        console.error('❌ Error handling successful auth:', error);
+        setStatus('error');
+        setMessage('Authentication succeeded but profile creation failed. Please try signing in.');
       }
     };
 
