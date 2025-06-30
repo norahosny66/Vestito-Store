@@ -12,6 +12,7 @@ import MyOrders from './pages/MyOrders';
 import Cart from './pages/Cart';
 import Admin from './pages/Admin';
 import AuthCallback from './pages/AuthCallback';
+import ResetPassword from './pages/ResetPassword';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
                 <Route path="/my-orders" element={<MyOrders />} />
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/about" element={<div className="min-h-screen flex items-center justify-center"><h1 className="text-2xl font-bold">About Us - Coming Soon</h1></div>} />
                 <Route path="/contact" element={<div className="min-h-screen flex items-center justify-center"><h1 className="text-2xl font-bold">Contact - Coming Soon</h1></div>} />
               </Routes>

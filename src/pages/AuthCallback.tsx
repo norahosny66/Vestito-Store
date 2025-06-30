@@ -220,10 +220,7 @@ const AuthCallback: React.FC = () => {
 
   const validatePassword = (password: string) => {
     const errors = [];
-    if (password.length < 8) errors.push('At least 8 characters');
-    if (!/[A-Z]/.test(password)) errors.push('One uppercase letter');
-    if (!/[a-z]/.test(password)) errors.push('One lowercase letter');
-    if (!/[0-9]/.test(password)) errors.push('One number');
+    if (password.length < 6) errors.push('At least 6 characters');
     return errors;
   };
 
@@ -235,7 +232,7 @@ const AuthCallback: React.FC = () => {
     e.preventDefault();
     
     if (!isPasswordValid) {
-      setResetError('Please meet all password requirements');
+      setResetError('Password must be at least 6 characters');
       return;
     }
 
@@ -259,13 +256,15 @@ const AuthCallback: React.FC = () => {
         setResetError(error.message);
       } else {
         console.log('✅ Password updated successfully');
-        setStatus('success');
-        setMessage('Password updated successfully! You can now sign in with your new password.');
         
-        // Sign out the user so they can sign in with new password
+        // Sign out the user immediately after password reset
+        console.log('👋 Signing out user after password reset...');
         await supabase.auth.signOut();
         
-        // Redirect to home page after a short delay
+        setStatus('success');
+        setMessage('Your password has been reset. Please sign in with your new password.');
+        
+        // Redirect to sign in page after a short delay
         setTimeout(() => {
           navigate('/', { replace: true });
         }, 3000);
@@ -341,6 +340,7 @@ const AuthCallback: React.FC = () => {
                       placeholder="Enter new password"
                       required
                       disabled={resetLoading}
+                      minLength={6}
                     />
                     <button
                       type="button"
@@ -351,27 +351,9 @@ const AuthCallback: React.FC = () => {
                     </button>
                   </div>
                   
-                  {/* Password Requirements */}
-                  <div className="mt-3 space-y-2">
-                    <p className="text-xs font-medium text-gray-700">Password must contain:</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {[
-                        { label: 'At least 8 characters', valid: newPassword.length >= 8 },
-                        { label: 'One uppercase letter', valid: /[A-Z]/.test(newPassword) },
-                        { label: 'One lowercase letter', valid: /[a-z]/.test(newPassword) },
-                        { label: 'One number', valid: /[0-9]/.test(newPassword) }
-                      ].map((req, index) => (
-                        <div key={index} className={`flex items-center space-x-1 ${
-                          req.valid ? 'text-green-600' : 'text-gray-500'
-                        }`}>
-                          <div className={`w-2 h-2 rounded-full ${
-                            req.valid ? 'bg-green-500' : 'bg-gray-300'
-                          }`} />
-                          <span>{req.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Password must be at least 6 characters long
+                  </p>
                 </div>
 
                 {/* Confirm Password */}
@@ -395,6 +377,7 @@ const AuthCallback: React.FC = () => {
                       placeholder="Confirm new password"
                       required
                       disabled={resetLoading}
+                      minLength={6}
                     />
                     <button
                       type="button"
@@ -422,9 +405,9 @@ const AuthCallback: React.FC = () => {
                   <div className="flex items-start space-x-3">
                     <Lock className="w-5 h-5 text-blue-500 mt-0.5" />
                     <div>
-                      <p className="text-blue-800 text-sm font-medium">Secure Password Tips</p>
+                      <p className="text-blue-800 text-sm font-medium">Security Notice</p>
                       <p className="text-blue-700 text-xs mt-1">
-                        Use a unique password that you don't use elsewhere. Consider using a password manager.
+                        After updating your password, you'll be signed out and need to sign in again with your new password.
                       </p>
                     </div>
                   </div>
@@ -459,7 +442,7 @@ const AuthCallback: React.FC = () => {
               <CheckCircle className="w-8 h-8 text-green-500" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              {message.includes('Password') ? 'Password Updated!' : 'Success!'}
+              {message.includes('Password') ? 'Password Reset Complete!' : 'Success!'}
             </h2>
             <p className="text-gray-600 mb-6">
               {message}
@@ -467,7 +450,7 @@ const AuthCallback: React.FC = () => {
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <p className="text-green-700 text-sm">
                 {message.includes('Password') 
-                  ? '🎉 You can now sign in with your new password. Redirecting you to the homepage...' 
+                  ? '🎉 You can now sign in with your new password. Redirecting you to the sign in page...' 
                   : '🎉 Redirecting you to the homepage...'
                 }
               </p>
