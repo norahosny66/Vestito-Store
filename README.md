@@ -4,7 +4,7 @@ A modern e-commerce platform for customizable fashion with AI-powered design gen
 
 ## 🌟 Live Demo
 
-Visit the live application: **https://vestito.netlify.app**
+Visit the live application: **[https://vestito.netlify.app](https://vestitostore.netlify.app/)**
 
 ## Features
 
